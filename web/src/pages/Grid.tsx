@@ -4,6 +4,7 @@ import { useFilters } from "../hooks/useFilters";
 import { ProjectCard } from "../components/ProjectCard";
 import { EmptyState } from "../components/EmptyState";
 import { FilterBar } from "../components/FilterBar";
+import { ConflictBanner } from "../components/ConflictBanner";
 import { applyFilters, sortProjects, groupByParent } from "../lib/filter";
 
 export default function Grid() {
@@ -40,6 +41,7 @@ export default function Grid() {
 
   return (
     <>
+      <ConflictBanner conflicts={data.conflicts} />
       <FilterBar languages={languages} counts={counts} />
       <main className="p-5">
         <p className="text-xs text-gray-500 mb-3">显示 {filtered.length} / {data.projects.length} 个项目</p>
