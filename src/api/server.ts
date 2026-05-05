@@ -6,6 +6,7 @@ import { loadProjects, saveProjects, mergeWithScan } from "../store/projects.js"
 import { findConflicts } from "../scanner/conflicts.js";
 import type { PersistedStore, Project, ScanResult } from "../types.js";
 import { DEFAULT_SETTINGS } from "../types.js";
+import * as openHelpers from "./open.js";
 
 export interface BuildServerOptions {
   scanRoot: string;
@@ -146,6 +147,45 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
 
   app.post("/api/scan", async () => {
     return await performScanAndPersist({ scanRoot: opts.scanRoot, projectsFile });
+  });
+
+  app.post<{ Params: { id: string } }>("/api/projects/:id/open-folder", async (req, reply) => {
+    const id = decodeURIComponent(req.params.id);
+    const store = await getStoreOrEmpty();
+    const proj = store.projects.find((p) => p.id === id);
+    if (!proj) return reply.code(404).send({ error: "not found" });
+    try {
+      openHelpers.openFolder(proj.absPath);
+      return { ok: true };
+    } catch (err) {
+      return reply.code(500).send({ error: (err as Error).message });
+    }
+  });
+
+  app.post<{ Params: { id: string } }>("/api/projects/:id/open-vscode", async (req, reply) => {
+    const id = decodeURIComponent(req.params.id);
+    const store = await getStoreOrEmpty();
+    const proj = store.projects.find((p) => p.id === id);
+    if (!proj) return reply.code(404).send({ error: "not found" });
+    try {
+      openHelpers.openVSCode(proj.absPath);
+      return { ok: true };
+    } catch (err) {
+      return reply.code(500).send({ error: (err as Error).message });
+    }
+  });
+
+  app.post<{ Params: { id: string } }>("/api/projects/:id/open-terminal", async (req, reply) => {
+    const id = decodeURIComponent(req.params.id);
+    const store = await getStoreOrEmpty();
+    const proj = store.projects.find((p) => p.id === id);
+    if (!proj) return reply.code(404).send({ error: "not found" });
+    try {
+      openHelpers.openTerminal(proj.absPath);
+      return { ok: true };
+    } catch (err) {
+      return reply.code(500).send({ error: (err as Error).message });
+    }
   });
 
   return app;
