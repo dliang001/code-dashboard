@@ -1,0 +1,1 @@
+{ "name": "conflict-b", "scripts": { "dev": "next dev -p 9999" } }
