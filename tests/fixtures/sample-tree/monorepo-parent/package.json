@@ -1,0 +1,1 @@
+{ "name": "monorepo-parent", "scripts": { "dev:all": "concurrently \"npm:dev:*\"" } }

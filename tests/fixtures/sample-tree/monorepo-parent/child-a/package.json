@@ -1,0 +1,1 @@
+{ "name": "child-a", "scripts": { "dev": "vite --port 4001" } }
