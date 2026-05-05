@@ -1,7 +1,16 @@
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { Topbar } from "./components/Topbar";
+import Grid from "./pages/Grid";
+import Detail from "./pages/Detail";
+
 export default function App() {
   return (
-    <div className="min-h-screen flex items-center justify-center">
-      <h1 className="text-2xl font-semibold">Code Projects Dashboard</h1>
-    </div>
+    <BrowserRouter>
+      <Topbar />
+      <Routes>
+        <Route path="/" element={<Grid />} />
+        <Route path="/project/:id/*" element={<Detail />} />
+      </Routes>
+    </BrowserRouter>
   );
 }
