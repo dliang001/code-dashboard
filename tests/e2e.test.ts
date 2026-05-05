@@ -16,6 +16,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await server.close();
+  await fs.rm(tmpData, { recursive: true, force: true });
 });
 
 describe("e2e against real D:\\code", () => {
