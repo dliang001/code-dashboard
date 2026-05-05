@@ -44,6 +44,24 @@ describe("save + load projects.json", () => {
     const loaded = await loadProjects(file);
     expect(loaded).toBeNull();
   });
+
+  it("throws on corrupt JSON file", async () => {
+    const file = path.join(tmpRoot, "projects.json");
+    await fs.writeFile(file, "{ not valid json", "utf-8");
+    await expect(loadProjects(file)).rejects.toThrow(/Corrupt projects file/);
+  });
+
+  it("throws on JSON with wrong shape", async () => {
+    const file = path.join(tmpRoot, "projects.json");
+    await fs.writeFile(file, JSON.stringify({ hello: "world" }), "utf-8");
+    await expect(loadProjects(file)).rejects.toThrow(/Invalid projects file shape/);
+  });
+
+  it("throws on JSON with wrong version", async () => {
+    const file = path.join(tmpRoot, "projects.json");
+    await fs.writeFile(file, JSON.stringify({ version: 2, scanRoot: "x", scannedAt: "x", settings: {}, projects: [] }), "utf-8");
+    await expect(loadProjects(file)).rejects.toThrow(/Invalid projects file shape/);
+  });
 });
 
 describe("mergeWithScan", () => {

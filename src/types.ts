@@ -26,6 +26,11 @@ export interface Project {
   kind: ProjectKind;
   name: string;
 
+  /**
+   * USER-EDITABLE FIELDS BELOW.
+   * When adding a new user-editable field, also update USER_PRESERVED_FIELDS
+   * in src/store/projects.ts so re-scans don't overwrite user data.
+   */
   /** User-editable description; null if user hasn't set */
   description: string | null;
   /** Auto-detected (README first paragraph) */
