@@ -1,10 +1,43 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import path from "node:path";
+import os from "node:os";
+import fs from "node:fs/promises";
 import { detectSignals } from "../src/scanner/signals";
 
 const FIX = path.join(__dirname, "fixtures", "sample-tree");
 
+const tempDirs: string[] = [];
+
+async function makeTempDir(prefix: string): Promise<string> {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), `signals-${prefix}-`));
+  tempDirs.push(dir);
+  return dir;
+}
+
+async function writePackageJson(
+  dir: string,
+  scripts: Record<string, string>,
+): Promise<void> {
+  await fs.writeFile(
+    path.join(dir, "package.json"),
+    JSON.stringify({ name: "tmp", version: "0.0.0", scripts }),
+    "utf-8",
+  );
+}
+
 describe("detectSignals", () => {
+  afterEach(async () => {
+    while (tempDirs.length > 0) {
+      const dir = tempDirs.pop();
+      if (!dir) continue;
+      try {
+        await fs.rm(dir, { recursive: true, force: true });
+      } catch {
+        /* best-effort cleanup */
+      }
+    }
+  });
+
   it("identifies a Node.js project from package.json", async () => {
     const sig = await detectSignals(path.join(FIX, "node-app"));
     expect(sig.kind).toBe("node");
@@ -36,16 +69,47 @@ describe("detectSignals", () => {
   });
 
   it("returns kind=unknown for empty directory", async () => {
-    const tmp = path.join(__dirname, "fixtures", "empty-dir");
-    const fs = await import("node:fs/promises");
-    await fs.mkdir(tmp, { recursive: true });
+    const tmp = await makeTempDir("empty");
     const sig = await detectSignals(tmp);
     expect(sig.kind).toBe("unknown");
     expect(sig.startCommandDetected).toBeNull();
   });
 
-  it("prefers dev > start > serve for npm scripts", async () => {
-    const sig = await detectSignals(path.join(FIX, "node-app"));
-    expect(sig.startCommandDetected).toBe("npm run dev");
+  describe("npm script priority (dev > start > serve > first)", () => {
+    // Priority scripts are intentionally placed AFTER lower-priority scripts in
+    // these fixtures so the tests fail if the implementation simply returns
+    // the first key of `scripts` (Object.keys preserves insertion order in JS).
+
+    it("picks `start` when `dev` is absent (start placed after build)", async () => {
+      const dir = await makeTempDir("start");
+      await writePackageJson(dir, { build: "tsc", start: "node server.js" });
+      const sig = await detectSignals(dir);
+      expect(sig.startCommandDetected).toBe("npm run start");
+    });
+
+    it("picks `serve` when `dev` and `start` are absent (serve placed last)", async () => {
+      const dir = await makeTempDir("serve");
+      await writePackageJson(dir, { build: "tsc", lint: "eslint .", serve: "vite preview" });
+      const sig = await detectSignals(dir);
+      expect(sig.startCommandDetected).toBe("npm run serve");
+    });
+
+    it("falls back to first script when none of dev/start/serve exist", async () => {
+      const dir = await makeTempDir("fallback");
+      await writePackageJson(dir, { build: "tsc", lint: "eslint ." });
+      const sig = await detectSignals(dir);
+      expect(sig.startCommandDetected).toBe("npm run build");
+    });
+
+    it("prefers `dev` when all three are present (dev placed last)", async () => {
+      const dir = await makeTempDir("all");
+      await writePackageJson(dir, {
+        serve: "next serve",
+        start: "next start",
+        dev: "next dev",
+      });
+      const sig = await detectSignals(dir);
+      expect(sig.startCommandDetected).toBe("npm run dev");
+    });
   });
 });
