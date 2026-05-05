@@ -4,13 +4,28 @@ import { scan } from "../scanner/index.js";
 import { enrichAll } from "../metadata/index.js";
 import { loadProjects, saveProjects, mergeWithScan } from "../store/projects.js";
 import { findConflicts } from "../scanner/conflicts.js";
-import type { PersistedStore, Project } from "../types.js";
+import type { PersistedStore, Project, ScanResult } from "../types.js";
 import { DEFAULT_SETTINGS } from "../types.js";
 
 export interface BuildServerOptions {
   scanRoot: string;
   dataRoot: string;
   logger?: boolean;
+}
+
+export interface ScanContext {
+  scanRoot: string;
+  projectsFile: string;
+}
+
+export async function performScanAndPersist(ctx: ScanContext): Promise<ScanResult> {
+  const fresh = await scan(ctx.scanRoot);
+  const enriched = await enrichAll(fresh.projects);
+  const stored = await loadProjects(ctx.projectsFile);
+  const merged = mergeWithScan(stored?.projects ?? [], enriched);
+  const result: ScanResult = { ...fresh, projects: merged, conflicts: findConflicts(merged) };
+  await saveProjects(ctx.projectsFile, result, stored?.settings ?? DEFAULT_SETTINGS);
+  return result;
 }
 
 const PATCHABLE_FIELDS = new Set([
@@ -47,6 +62,27 @@ function validatePatchBody(body: Record<string, unknown>): { ok: true } | { ok: 
 export async function buildServer(opts: BuildServerOptions): Promise<FastifyInstance> {
   const projectsFile = path.join(opts.dataRoot, "projects.json");
   const app = Fastify({ logger: opts.logger ?? false });
+
+  // PowerShell's Invoke-RestMethod -Method Post defaults to form-urlencoded with empty body.
+  // We don't accept form-urlencoded data anywhere, so treat it as an empty object.
+  app.addContentTypeParser("application/x-www-form-urlencoded", { parseAs: "string" }, (_req, _body, done) => {
+    done(null, {});
+  });
+
+  // Replace default JSON parser with one that accepts empty body as {}.
+  app.removeContentTypeParser("application/json");
+  app.addContentTypeParser("application/json", { parseAs: "string" }, (_req, body, done) => {
+    const trimmed = (body as string).trim();
+    if (trimmed === "") return done(null, {});
+    try {
+      done(null, JSON.parse(trimmed));
+    } catch (err) {
+      // Mark as 400 so Fastify treats it like its built-in malformed-JSON response.
+      const e = err as Error & { statusCode?: number };
+      e.statusCode = 400;
+      done(e, undefined);
+    }
+  });
 
   async function getStoreOrEmpty(): Promise<PersistedStore> {
     const stored = await loadProjects(projectsFile);
@@ -109,13 +145,7 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   );
 
   app.post("/api/scan", async () => {
-    const fresh = await scan(opts.scanRoot);
-    const enriched = await enrichAll(fresh.projects);
-    const stored = await loadProjects(projectsFile);
-    const merged = mergeWithScan(stored?.projects ?? [], enriched);
-    const result = { ...fresh, projects: merged, conflicts: findConflicts(merged) };
-    await saveProjects(projectsFile, result, stored?.settings ?? DEFAULT_SETTINGS);
-    return result;
+    return await performScanAndPersist({ scanRoot: opts.scanRoot, projectsFile });
   });
 
   return app;

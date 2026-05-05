@@ -142,3 +142,37 @@ describe("POST /api/scan", () => {
     expect(body.project.description).toBe("kept across rescans");
   });
 });
+
+describe("POST content-type tolerance", () => {
+  it("accepts POST /api/scan with form-urlencoded content-type and empty body", async () => {
+    const res = await server.inject({
+      method: "POST",
+      url: "/api/scan",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      payload: "",
+    });
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("accepts POST /api/scan with json content-type and empty body", async () => {
+    const res = await server.inject({
+      method: "POST",
+      url: "/api/scan",
+      headers: { "content-type": "application/json" },
+      payload: "",
+    });
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("rejects PATCH with json content-type and malformed JSON body", async () => {
+    await server.inject({ method: "POST", url: "/api/scan" });
+    const res = await server.inject({
+      method: "PATCH",
+      url: "/api/projects/" + encodeURIComponent("node-app"),
+      headers: { "content-type": "application/json" },
+      payload: "{ not valid",
+    });
+    // Fastify still returns 400 for malformed JSON
+    expect(res.statusCode).toBe(400);
+  });
+});

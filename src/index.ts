@@ -3,9 +3,10 @@ import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { buildServer } from "./api/server.js";
+import { buildServer, performScanAndPersist } from "./api/server.js";
 import { scan } from "./scanner/index.js";
 import { enrichAll } from "./metadata/index.js";
+import { loadProjects } from "./store/projects.js";
 import { getDashboardPaths } from "./config.js";
 
 interface CliArgs {
@@ -53,6 +54,15 @@ async function main() {
   }
 
   const server = await buildServer({ scanRoot, dataRoot: paths.root, logger: true });
+
+  // Auto-scan on first run so GET /api/projects has data immediately.
+  const existing = await loadProjects(paths.projectsFile);
+  if (!existing) {
+    console.log("First run — scanning workspace...");
+    const result = await performScanAndPersist({ scanRoot, projectsFile: paths.projectsFile });
+    console.log(`Initial scan complete: ${result.projects.length} projects, ${result.conflicts.length} conflicts`);
+  }
+
   await server.listen({ port: argv.port, host: "127.0.0.1" });
   console.log(`Dashboard backend listening on http://localhost:${argv.port}`);
   console.log(`Scan root: ${scanRoot}`);
