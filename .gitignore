@@ -1,0 +1,5 @@
+node_modules/
+dist/
+.dashboard-state/
+*.log
+.DS_Store
