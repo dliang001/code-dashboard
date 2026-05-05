@@ -1,9 +1,11 @@
 import { useParams, Link } from "react-router-dom";
 import { useState } from "react";
-import { useProject } from "../hooks/useProjects";
+import { useProject, usePatchProject } from "../hooks/useProjects";
 import { Section } from "../components/Section";
 import { OpenButtons } from "../components/OpenButtons";
 import { StatusBadge } from "../components/StatusBadge";
+import { EditableText } from "../components/EditableText";
+import { TagInput } from "../components/TagInput";
 import { formatPort, formatRelative, projectEmoji } from "../lib/format";
 
 type Tab = "overview" | "subprojects" | "readme";
@@ -13,6 +15,7 @@ export default function Detail() {
   const splat = params["*"] ?? "";
   const id = splat ? `${params.id}/${splat}` : (params.id ?? "");
   const { data, isLoading, error } = useProject(id);
+  const patch = usePatchProject(id);
   const [tab, setTab] = useState<Tab>("overview");
 
   if (isLoading) return <main className="p-5"><p className="text-gray-500">加载中…</p></main>;
@@ -21,8 +24,6 @@ export default function Detail() {
 
   const proj = data.project;
   const port = proj.port ?? proj.portDetected;
-  const startCmd = proj.startCommand ?? proj.startCommandDetected;
-  const description = proj.description ?? proj.descriptionAuto ?? "";
 
   return (
     <>
@@ -70,10 +71,23 @@ export default function Detail() {
           {/* Left column */}
           <div className="space-y-3">
             <Section label="描述">
-              <p className="text-sm text-gray-700 leading-relaxed">{description || <em className="text-gray-400">未填写描述</em>}</p>
-              <div className="flex flex-wrap gap-1 mt-2">
-                {proj.frameworks.map((f) => <Tag key={f}>{f}</Tag>)}
-                {proj.tags.map((t) => <Tag key={t} variant="user">{t}</Tag>)}
+              <EditableText
+                value={proj.description ?? proj.descriptionAuto ?? ""}
+                placeholder="点击补充描述"
+                onSave={(v) => patch.mutate({ description: v.trim() === "" ? null : v })}
+              />
+              <div className="mt-3">
+                <div className="text-[10px] font-medium tracking-wide uppercase text-gray-500 mb-1">标签</div>
+                <TagInput tags={proj.tags} onChange={(tags) => patch.mutate({ tags })} />
+              </div>
+              <div className="mt-3 flex items-center gap-2 text-xs">
+                <input
+                  id="archive-toggle"
+                  type="checkbox"
+                  checked={proj.archived}
+                  onChange={(e) => patch.mutate({ archived: e.target.checked })}
+                />
+                <label htmlFor="archive-toggle">归档此项目（默认隐藏在主网格）</label>
               </div>
             </Section>
             <Section label="日志">
@@ -83,7 +97,15 @@ export default function Detail() {
           {/* Right column */}
           <div className="space-y-3">
             <Section label="启动命令">
-              <code className="block bg-gray-50 px-2 py-1.5 rounded text-xs font-mono">{startCmd ?? "—"}</code>
+              <EditableText
+                value={proj.startCommand ?? proj.startCommandDetected ?? ""}
+                placeholder="未检测到启动命令"
+                multiline={false}
+                onSave={(v) => patch.mutate({ startCommand: v.trim() === "" ? null : v })}
+              />
+              <div className="mt-1 text-[10px] text-gray-400">
+                自动检测到：<code>{proj.startCommandDetected ?? "无"}</code>
+              </div>
             </Section>
             <Section label="运行状态">
               <p className="text-xs text-gray-500 italic">端口探测和 PID 跟踪在 Plan 2 上线。</p>
@@ -135,11 +157,6 @@ function TabBtn({ children, active, onClick }: { children: React.ReactNode; acti
   return (
     <button type="button" onClick={onClick} className={`px-3 py-2 border-b-2 ${cls}`}>{children}</button>
   );
-}
-
-function Tag({ children, variant = "default" }: { children: React.ReactNode; variant?: "default" | "user" }) {
-  const cls = variant === "user" ? "bg-blue-50 text-blue-700" : "bg-gray-100 text-gray-700";
-  return <span className={`text-[10px] px-1.5 py-0.5 rounded ${cls}`}>{children}</span>;
 }
 
 function Row({ k, v }: { k: string; v: string }) {
