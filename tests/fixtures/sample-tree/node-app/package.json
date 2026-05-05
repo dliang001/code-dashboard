@@ -1,0 +1,9 @@
+{
+  "name": "node-app",
+  "scripts": {
+    "dev": "vite --port 4111",
+    "start": "node server.js",
+    "build": "vite build"
+  },
+  "dependencies": { "react": "^18.0.0", "next": "^14.0.0" }
+}
