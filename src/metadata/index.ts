@@ -26,6 +26,17 @@ export async function enrichWithMetadata(project: Project): Promise<Project> {
   };
 }
 
-export async function enrichAll(projects: Project[]): Promise<Project[]> {
-  return Promise.all(projects.map(enrichWithMetadata));
+export async function enrichAll(projects: Project[], concurrency = 8): Promise<Project[]> {
+  const out: Project[] = new Array(projects.length);
+  let next = 0;
+  async function worker() {
+    while (true) {
+      const i = next++;
+      if (i >= projects.length) return;
+      out[i] = await enrichWithMetadata(projects[i]!);
+    }
+  }
+  const n = Math.min(concurrency, projects.length);
+  await Promise.all(Array.from({ length: n }, worker));
+  return out;
 }

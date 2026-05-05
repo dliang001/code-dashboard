@@ -11,7 +11,7 @@ export async function extractReadmeFirstParagraph(dir: string): Promise<string |
   return null;
 }
 
-function parseFirstParagraph(md: string): string | null {
+export function parseFirstParagraph(md: string): string | null {
   const lines = md.split(/\r?\n/);
   let inFirstPara = false;
   const buf: string[] = [];

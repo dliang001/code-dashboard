@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import path from "node:path";
-import { extractReadmeFirstParagraph } from "../src/metadata/readme";
+import { extractReadmeFirstParagraph, parseFirstParagraph } from "../src/metadata/readme";
 import { enrichWithMetadata } from "../src/metadata";
 import type { Project } from "../src/types";
 
@@ -47,5 +47,35 @@ describe("enrichWithMetadata", () => {
     const proj = bareProject("rust-app", path.join(FIX, "rust-app"));
     const enriched = await enrichWithMetadata(proj);
     expect(enriched.gitBranch).toBeNull();
+  });
+});
+
+describe("parseFirstParagraph edge cases", () => {
+  it("handles CRLF line endings", () => {
+    const md = "# Title\r\n\r\nFirst paragraph here.\r\n\r\n## Next";
+    expect(parseFirstParagraph(md)).toBe("First paragraph here.");
+  });
+
+  it("returns null for empty input", () => {
+    expect(parseFirstParagraph("")).toBeNull();
+  });
+
+  it("returns null for headings-only README", () => {
+    expect(parseFirstParagraph("# Title\n\n## Section\n\n### Subsection")).toBeNull();
+  });
+
+  it("skips badges before the paragraph", () => {
+    const md = "# Title\n\n![badge](url)\n[![ci](u1)](u2)\n\nReal description here.";
+    expect(parseFirstParagraph(md)).toBe("Real description here.");
+  });
+
+  it("collapses multi-line wrapped paragraphs into one space-separated string", () => {
+    const md = "# T\n\nLine one of\nthe paragraph\nspanning three lines.\n\n## Next";
+    expect(parseFirstParagraph(md)).toBe("Line one of the paragraph spanning three lines.");
+  });
+
+  it("collapses internal whitespace to single spaces", () => {
+    const md = "# T\n\nMultiple    spaces   between  words.";
+    expect(parseFirstParagraph(md)).toBe("Multiple spaces between words.");
   });
 });
