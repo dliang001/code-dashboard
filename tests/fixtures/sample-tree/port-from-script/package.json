@@ -1,0 +1,4 @@
+{
+  "name": "port-from-script",
+  "scripts": { "dev": "next dev -p 5050" }
+}
