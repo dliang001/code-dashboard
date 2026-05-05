@@ -17,6 +17,33 @@ const PATCHABLE_FIELDS = new Set([
   "description", "tags", "startCommand", "port", "archived",
 ]);
 
+function validatePatchBody(body: Record<string, unknown>): { ok: true } | { ok: false; error: string } {
+  for (const [key, val] of Object.entries(body)) {
+    if (!PATCHABLE_FIELDS.has(key)) return { ok: false, error: `field not editable: ${key}` };
+    if (val === null) continue; // nullable user fields
+    switch (key) {
+      case "description":
+      case "startCommand":
+        if (typeof val !== "string") return { ok: false, error: `${key} must be string or null` };
+        break;
+      case "port":
+        if (typeof val !== "number" || !Number.isInteger(val) || val < 1 || val > 65535) {
+          return { ok: false, error: `port must be integer 1-65535 or null` };
+        }
+        break;
+      case "archived":
+        if (typeof val !== "boolean") return { ok: false, error: `archived must be boolean` };
+        break;
+      case "tags":
+        if (!Array.isArray(val) || !val.every((t) => typeof t === "string")) {
+          return { ok: false, error: `tags must be array of strings` };
+        }
+        break;
+    }
+  }
+  return { ok: true };
+}
+
 export async function buildServer(opts: BuildServerOptions): Promise<FastifyInstance> {
   const projectsFile = path.join(opts.dataRoot, "projects.json");
   const app = Fastify({ logger: opts.logger ?? false });
@@ -55,11 +82,8 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     async (req, reply) => {
       const id = decodeURIComponent(req.params.id);
       const body = req.body ?? {};
-      for (const k of Object.keys(body)) {
-        if (!PATCHABLE_FIELDS.has(k)) {
-          return reply.code(400).send({ error: `field not editable: ${k}` });
-        }
-      }
+      const v = validatePatchBody(body);
+      if (!v.ok) return reply.code(400).send({ error: v.error });
       const store = await getStoreOrEmpty();
       const idx = store.projects.findIndex((p) => p.id === id);
       if (idx === -1) return reply.code(404).send({ error: "not found" });
