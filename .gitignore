@@ -3,3 +3,5 @@ dist/
 .dashboard-state/
 *.log
 .DS_Store
+web/node_modules/
+web/dist/
