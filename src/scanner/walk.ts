@@ -5,8 +5,6 @@ import { detectSignals } from "./signals.js";
 import { detectPort } from "./ports.js";
 import type { Project, ProjectKind } from "../types.js";
 
-const MAX_DEPTH = 2;
-
 interface WalkOptions {
   extraIgnored?: string[];
 }
@@ -54,6 +52,7 @@ async function buildBareProject(scanRoot: string, abs: string): Promise<Project 
   };
 }
 
+// Depth = 2: scanRoot → top dirs → immediate children. Plan-1 Task 6.
 export async function walkProjects(scanRoot: string, opts: WalkOptions = {}): Promise<Project[]> {
   const out: Project[] = [];
   const topNames = await listDirs(scanRoot);
@@ -113,7 +112,6 @@ export async function walkProjects(scanRoot: string, opts: WalkOptions = {}): Pr
       }
     }
     // else: no project, no children → skip entirely
-    void MAX_DEPTH; // depth fixed at 2 (top + immediate children)
   }
 
   return out;

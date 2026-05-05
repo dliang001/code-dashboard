@@ -49,4 +49,14 @@ describe("walkProjects", () => {
       expect(p.id).not.toContain("\\");
     }
   });
+
+  it("creates parent-container when top dir has no signals but children do", async () => {
+    const found = await walkProjects(FIX);
+    const container = found.find((p) => p.id === "container-only");
+    expect(container).toBeDefined();
+    expect(container!.kind).toBe("parent-container");
+    expect(container!.children.sort()).toEqual(["container-only/api", "container-only/web"]);
+    const child = found.find((p) => p.id === "container-only/api")!;
+    expect(child.parent).toBe("container-only");
+  });
 });
