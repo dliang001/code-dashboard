@@ -1,4 +1,5 @@
 import Fastify, { type FastifyInstance } from "fastify";
+import fastifyStatic from "@fastify/static";
 import path from "node:path";
 import { scan } from "../scanner/index.js";
 import { enrichAll } from "../metadata/index.js";
@@ -12,6 +13,8 @@ export interface BuildServerOptions {
   scanRoot: string;
   dataRoot: string;
   logger?: boolean;
+  /** Path to web/dist for production static serving. If undefined, no static serving. */
+  webDist?: string;
 }
 
 export interface ScanContext {
@@ -167,6 +170,20 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
   registerOpenRoute("open-folder",   () => openHelpers.openFolder);
   registerOpenRoute("open-vscode",   () => openHelpers.openVSCode);
   registerOpenRoute("open-terminal", () => openHelpers.openTerminal);
+
+  if (opts.webDist) {
+    await app.register(fastifyStatic, {
+      root: opts.webDist,
+      prefix: "/",
+    });
+    // SPA fallback: any unknown GET serves index.html
+    app.setNotFoundHandler((req, reply) => {
+      if (req.method === "GET" && !req.url.startsWith("/api/")) {
+        return reply.sendFile("index.html");
+      }
+      return reply.code(404).send({ error: "not found" });
+    });
+  }
 
   return app;
 }

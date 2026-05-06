@@ -3,6 +3,7 @@ import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { buildServer, performScanAndPersist } from "./api/server.js";
 import { scan } from "./scanner/index.js";
 import { enrichAll } from "./metadata/index.js";
@@ -53,7 +54,17 @@ async function main() {
     return;
   }
 
-  const server = await buildServer({ scanRoot, dataRoot: paths.root, logger: true });
+  // Resolve to <project-root>/web/dist relative to dist/index.js (or src/index.ts in dev)
+  const here = fileURLToPath(new URL(".", import.meta.url));
+  const webDist = path.resolve(here, "..", "web", "dist");
+  const webDistExists = await fs.access(webDist).then(() => true).catch(() => false);
+
+  const server = await buildServer({
+    scanRoot,
+    dataRoot: paths.root,
+    logger: true,
+    webDist: webDistExists ? webDist : undefined,
+  });
 
   // Auto-scan on first run so GET /api/projects has data immediately.
   const existing = await loadProjects(paths.projectsFile);
@@ -65,6 +76,12 @@ async function main() {
 
   await server.listen({ port: argv.port, host: "127.0.0.1" });
   console.log(`Dashboard backend listening on http://localhost:${argv.port}`);
+  if (webDistExists) {
+    console.log(`Frontend served from ${webDist}`);
+    console.log(`Open in browser: http://localhost:${argv.port}/`);
+  } else {
+    console.log("Frontend not built (run `npm run build:web`); only API is available.");
+  }
   console.log(`Scan root: ${scanRoot}`);
   console.log(`Data root: ${paths.root}`);
 }
