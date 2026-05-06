@@ -41,7 +41,7 @@ export default function Detail() {
               <div className="min-w-0">
                 <div className="font-semibold text-base truncate">{proj.name}</div>
                 <div className="text-xs text-gray-500 flex items-center gap-1.5 mt-0.5">
-                  <StatusBadge state="unknown" />
+                  <StatusBadge state={data.runState} />
                   <span>·</span>
                   <span>{proj.kind}</span>
                   {proj.children.length > 0 && (
@@ -108,7 +108,15 @@ export default function Detail() {
               </div>
             </Section>
             <Section label="运行状态">
-              <p className="text-xs text-gray-500 italic">端口探测和 PID 跟踪在 Plan 2 上线。</p>
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2 text-xs">
+                  <StatusBadge state={data.runState} />
+                  {port != null && <span className="text-gray-500">端口 :{port}</span>}
+                </div>
+                <p className="text-[11px] text-gray-400 italic">
+                  目前仅探测端口占用。dashboard 内启停（含日志、PID 跟踪）下一阶段上线。
+                </p>
+              </div>
             </Section>
             <Section label="基本信息">
               <dl className="text-xs space-y-1.5 text-gray-600">
@@ -118,6 +126,16 @@ export default function Detail() {
                 <Row k="最近修改" v={formatRelative(proj.lastModified)} />
                 <Row k="父项目" v={proj.parent ?? "—"} />
               </dl>
+              {data.conflictPeers.length > 0 && (
+                <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded text-[11px] text-red-700">
+                  ⚠ 端口 :{port} 与以下项目冲突：
+                  <ul className="mt-1 ml-3 list-disc">
+                    {data.conflictPeers.map((id) => (
+                      <li key={id}><code>{id}</code></li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </Section>
           </div>
         </div>

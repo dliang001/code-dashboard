@@ -52,3 +52,25 @@ describe("runState in /api/projects/:id", () => {
     expect(body.runState).toBe("running-external");
   });
 });
+
+describe("conflictPeers in /api/projects/:id", () => {
+  it("returns empty list when no conflict", async () => {
+    const res = await server.inject({ method: "GET", url: "/api/projects/" + encodeURIComponent("rust-app") });
+    const body = res.json() as { conflictPeers: string[] };
+    expect(body.conflictPeers).toEqual([]);
+  });
+
+  it("returns peers when port conflict exists", async () => {
+    const res = await server.inject({ method: "GET", url: "/api/projects/" + encodeURIComponent("port-conflict-a") });
+    const body = res.json() as { conflictPeers: string[] };
+    expect(body.conflictPeers).toContain("port-conflict-b");
+    expect(body.conflictPeers).not.toContain("port-conflict-a");
+  });
+
+  it("does not include self in peers", async () => {
+    const res = await server.inject({ method: "GET", url: "/api/projects/" + encodeURIComponent("port-conflict-b") });
+    const body = res.json() as { conflictPeers: string[] };
+    expect(body.conflictPeers).toContain("port-conflict-a");
+    expect(body.conflictPeers).not.toContain("port-conflict-b");
+  });
+});

@@ -119,7 +119,12 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     const project = store.projects.find((p) => p.id === id);
     if (!project) return reply.code(404).send({ error: "not found" });
     const runState = opts.probeCache?.get(id) ?? "idle";
-    return { project, runState };
+    const conflicts = findConflicts(store.projects);
+    const port = project.port ?? project.portDetected;
+    const conflictPeers = port != null
+      ? (conflicts.find((c) => c.port === port)?.projectIds.filter((cid) => cid !== id) ?? [])
+      : [];
+    return { project, runState, conflictPeers };
   });
 
   app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>(

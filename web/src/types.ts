@@ -20,6 +20,7 @@ export interface ProjectListResponse {
 export interface ProjectDetailResponse {
   project: import("../../src/types.js").Project;
   runState: import("../../src/types.js").RunState;
+  conflictPeers: string[];
 }
 
 export interface PatchPayload {
