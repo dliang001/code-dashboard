@@ -4,10 +4,9 @@ import type { SortKey } from "../lib/filter";
 
 export interface FilterUiState {
   search: string;
-  language: string; // "all" | concrete
+  language: string;
   showArchived: boolean;
   sort: SortKey;
-  grouped: boolean;
 }
 
 const DEFAULTS: FilterUiState = {
@@ -15,7 +14,6 @@ const DEFAULTS: FilterUiState = {
   language: "all",
   showArchived: false,
   sort: "lastModified",
-  grouped: false,
 };
 
 export function useFilters(): [FilterUiState, (patch: Partial<FilterUiState>) => void] {
@@ -25,7 +23,6 @@ export function useFilters(): [FilterUiState, (patch: Partial<FilterUiState>) =>
     language: params.get("lang") ?? DEFAULTS.language,
     showArchived: params.get("archived") === "1",
     sort: ((params.get("sort") as SortKey | null) ?? DEFAULTS.sort),
-    grouped: params.get("group") === "1",
   };
 
   const update = useCallback((patch: Partial<FilterUiState>) => {
@@ -41,9 +38,6 @@ export function useFilters(): [FilterUiState, (patch: Partial<FilterUiState>) =>
     }
     if (patch.sort !== undefined) {
       patch.sort === DEFAULTS.sort ? next.delete("sort") : next.set("sort", patch.sort);
-    }
-    if (patch.grouped !== undefined) {
-      patch.grouped ? next.set("group", "1") : next.delete("group");
     }
     setParams(next, { replace: true });
   }, [params, setParams]);

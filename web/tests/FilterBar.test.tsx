@@ -34,16 +34,6 @@ describe("FilterBar", () => {
     expect(screen.getByTestId("qs").textContent).toContain("lang=python");
   });
 
-  it("toggling group switches URL ?group=1 on/off", async () => {
-    setup();
-    const user = userEvent.setup();
-    const toggle = screen.getByRole("button", { name: /分组/i });
-    await user.click(toggle);
-    expect(screen.getByTestId("qs").textContent).toContain("group=1");
-    await user.click(toggle);
-    expect(screen.getByTestId("qs").textContent).not.toContain("group=1");
-  });
-
   it("renders count chips", () => {
     setup();
     expect(screen.getByText(/全部 10/)).toBeInTheDocument();

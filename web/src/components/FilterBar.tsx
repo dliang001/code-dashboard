@@ -47,14 +47,6 @@ export function FilterBar({ languages, counts }: Props) {
 
         <div className="flex-1" />
 
-        <button
-          type="button"
-          onClick={() => update({ grouped: !filters.grouped })}
-          className={`px-2 py-1 rounded border text-xs ${filters.grouped ? "bg-gray-900 text-white border-gray-900" : "bg-white text-gray-700 border-gray-300"}`}
-        >
-          {filters.grouped ? "▾ 分组" : "▸ 分组"}
-        </button>
-
         <select
           value={filters.sort}
           onChange={(e) => update({ sort: e.target.value as "name" | "lastModified" | "status" })}
