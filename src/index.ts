@@ -9,6 +9,7 @@ import { scan } from "./scanner/index.js";
 import { enrichAll } from "./metadata/index.js";
 import { loadProjects } from "./store/projects.js";
 import { getDashboardPaths } from "./config.js";
+import { ProbeCache, probeAll } from "./probe/port.js";
 
 interface CliArgs {
   root?: string;
@@ -54,6 +55,7 @@ async function main() {
     return;
   }
 
+  const probeCache = new ProbeCache();
   // Resolve to <project-root>/web/dist relative to dist/index.js (or src/index.ts in dev)
   const here = fileURLToPath(new URL(".", import.meta.url));
   const webDist = path.resolve(here, "..", "web", "dist");
@@ -64,6 +66,7 @@ async function main() {
     dataRoot: paths.root,
     logger: true,
     webDist: webDistExists ? webDist : undefined,
+    probeCache,
   });
 
   // Auto-scan on first run so GET /api/projects has data immediately.
@@ -84,6 +87,16 @@ async function main() {
   }
   console.log(`Scan root: ${scanRoot}`);
   console.log(`Data root: ${paths.root}`);
+
+  // Run an initial probe sweep, then schedule recurring sweeps every 30s.
+  const stored = await loadProjects(paths.projectsFile);
+  const projectsForProbe = stored?.projects ?? [];
+  if (projectsForProbe.length > 0) {
+    void probeAll(projectsForProbe, probeCache).catch(() => {});
+    setInterval(() => {
+      void probeAll(projectsForProbe, probeCache).catch(() => {});
+    }, 30_000);
+  }
 }
 
 main().catch((err) => {

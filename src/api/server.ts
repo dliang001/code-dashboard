@@ -8,6 +8,7 @@ import { findConflicts } from "../scanner/conflicts.js";
 import type { PersistedStore, Project, ScanResult } from "../types.js";
 import { DEFAULT_SETTINGS } from "../types.js";
 import * as openHelpers from "./open.js";
+import { ProbeCache } from "../probe/port.js";
 
 export interface BuildServerOptions {
   scanRoot: string;
@@ -15,6 +16,7 @@ export interface BuildServerOptions {
   logger?: boolean;
   /** Path to web/dist for production static serving. If undefined, no static serving. */
   webDist?: string;
+  probeCache?: ProbeCache;
 }
 
 export interface ScanContext {
@@ -101,11 +103,13 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
 
   app.get("/api/projects", async () => {
     const store = await getStoreOrEmpty();
+    const runStates = opts.probeCache ? opts.probeCache.snapshot() : {};
     return {
       projects: store.projects,
       conflicts: findConflicts(store.projects),
       scanRoot: store.scanRoot,
       scannedAt: store.scannedAt,
+      runStates,
     };
   });
 
@@ -114,7 +118,8 @@ export async function buildServer(opts: BuildServerOptions): Promise<FastifyInst
     const store = await getStoreOrEmpty();
     const project = store.projects.find((p) => p.id === id);
     if (!project) return reply.code(404).send({ error: "not found" });
-    return { project };
+    const runState = opts.probeCache?.get(id) ?? "idle";
+    return { project, runState };
   });
 
   app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>(
