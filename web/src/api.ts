@@ -1,4 +1,4 @@
-import type { Project, ProjectListResponse, PatchPayload, ScanResult } from "./types";
+import type { Project, ProjectListResponse, ProjectDetailResponse, PatchPayload, ScanResult } from "./types";
 
 const BASE = ""; // Vite proxy in dev; same-origin in prod.
 
@@ -24,7 +24,7 @@ export async function listProjects(): Promise<ProjectListResponse> {
   return http<ProjectListResponse>("/api/projects");
 }
 
-export async function getProject(id: string): Promise<{ project: Project }> {
+export async function getProject(id: string): Promise<ProjectDetailResponse> {
   return http(`/api/projects/${encodeURIComponent(id)}`);
 }
 

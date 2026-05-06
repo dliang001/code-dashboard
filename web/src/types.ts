@@ -14,6 +14,12 @@ export interface ProjectListResponse {
   conflicts: import("../../src/types.js").PortConflict[];
   scanRoot: string;
   scannedAt: string;
+  runStates: Record<string, import("../../src/types.js").RunState>;
+}
+
+export interface ProjectDetailResponse {
+  project: import("../../src/types.js").Project;
+  runState: import("../../src/types.js").RunState;
 }
 
 export interface PatchPayload {
