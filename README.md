@@ -29,6 +29,24 @@ npm run install-shortcut -- -Port 7421 -Root "D:\projects"
 npm run install-shortcut -- -InstallStop
 ```
 
+## Moving To Another Machine
+
+This project currently ships best as a source-based local tool rather than a single `.exe`.
+On a new machine:
+
+1. Install Node.js 20+.
+2. Copy or clone this repository.
+3. Run `npm install`.
+4. Run `npm run build`.
+5. Run `npm run install-shortcut -- -Root "<your project folder>"`.
+
+The target machine still needs the runtimes used by your projects, such as `pnpm`, Python,
+Docker, or database services. The dashboard can discover and start projects, but it cannot
+install each project's own stack automatically.
+
+Dashboard state lives in `~/.code-dashboard`. Copy that folder too if you want to migrate
+edited descriptions, tags, archived flags, and manually configured ports.
+
 ## Manual Usage
 
 Production, single port:
@@ -119,6 +137,19 @@ The dashboard can start and stop projects from list rows or detail pages. Manage
 - Fallback URL discovery from the process listening port when logs do not print a URL.
 - Port conflict handling: if the desired port is occupied, the dashboard can allocate the next free port and pass it through `PORT`.
 
+### Editing Default Ports
+
+Open a project detail page and use the `Default port` panel to override the detected port.
+This is useful when:
+
+- The scanner could not infer a port.
+- Two projects share a detected default, such as many Vite apps on `5173`.
+- A project has a configurable port but does not declare it in scripts or config.
+
+The manually configured port is preserved across rescans and is used for URL display, conflict
+detection, and the `PORT` environment variable when the dashboard starts the project. Clear the
+override to return to the scanner's detected value.
+
 External processes are detected through port probes and process command lines. These show as
 `EXTERNAL` because the dashboard did not start them and should not stop them.
 
@@ -143,7 +174,8 @@ npm run launch
 
 Check whether the project declares a port. The scanner intentionally avoids guessing for
 frameworks without stable defaults, such as Express. Add an explicit `--port`, `PORT=`,
-or framework config if you want the dashboard to show a stable URL.
+framework config, or set a manual default port in the project detail page if you want the
+dashboard to show a stable URL.
 
 ### A project is RUNNING but URL is empty
 
@@ -154,6 +186,16 @@ If it is still empty, open `LOGS` and check whether the child process actually b
 
 Some diagnostics use Windows process and TCP listening data. If a terminal command fails with
 permission errors, restart the dashboard from the normal desktop shortcut or an elevated terminal.
+
+## Things Users Should Know
+
+- Restarting or shutting down the dashboard stops child processes that the dashboard started.
+- External processes are shown as `EXTERNAL`; the dashboard will not stop them.
+- Multiple projects may legitimately share a default port when they are not meant to run together.
+  Use manual port overrides for projects you often run side by side.
+- Rescan updates auto-detected fields, but preserves user-edited description, tags, archived
+  state, start command, and manual port.
+- For best URL detection, make dev servers print their local URL on startup or bind to a local TCP port.
 
 ## Tests
 

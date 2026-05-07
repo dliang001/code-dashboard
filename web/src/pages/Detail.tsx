@@ -144,6 +144,7 @@ export default function Detail({ onOpenLogs }: Props) {
             onPatchStartCommand={(v) =>
               patch.mutate({ startCommand: v.trim() === "" ? null : v })
             }
+            onPatchPort={(v) => patch.mutate({ port: v })}
             onPatchArchived={(b) => patch.mutate({ archived: b })}
             onOpenLogs={() => onOpenLogs?.(proj.id)}
           />
@@ -213,6 +214,7 @@ interface OverviewProps {
   hasCommand: boolean;
   onPatchDescription: (v: string) => void;
   onPatchStartCommand: (v: string) => void;
+  onPatchPort: (v: number | null) => void;
   onPatchArchived: (b: boolean) => void;
   onOpenLogs: () => void;
 }
@@ -224,6 +226,7 @@ function OverviewTab({
   hasCommand,
   onPatchDescription,
   onPatchStartCommand,
+  onPatchPort,
   onPatchArchived,
   onOpenLogs,
 }: OverviewProps) {
@@ -248,6 +251,16 @@ function OverviewTab({
           runState={data.runState}
           desiredPort={data.running?.desiredPort ?? null}
           allocatedPort={data.running?.allocatedPort ?? null}
+        />
+      </Section>
+
+      <Section label="默认端口">
+        <PortEditor
+          configuredPort={proj.port}
+          detectedPort={proj.portDetected}
+          effectivePort={port}
+          conflictPeers={data.conflictPeers}
+          onSave={onPatchPort}
         />
       </Section>
 
@@ -323,6 +336,107 @@ function KV({ k, v, mono = true }: { k: string; v: string; mono?: boolean }) {
     <div className="kv">
       <dt>{k}</dt>
       <dd className={mono ? "mono" : ""}>{v}</dd>
+    </div>
+  );
+}
+
+function PortEditor({
+  configuredPort,
+  detectedPort,
+  effectivePort,
+  conflictPeers,
+  onSave,
+}: {
+  configuredPort: number | null;
+  detectedPort: number | null;
+  effectivePort: number | null;
+  conflictPeers: string[];
+  onSave: (v: number | null) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<string>(
+    String(configuredPort ?? effectivePort ?? ""),
+  );
+  const hasOverride = configuredPort != null;
+  const parsed = Number(draft.trim());
+  const invalid = draft.trim() !== "" && (!Number.isInteger(parsed) || parsed < 1 || parsed > 65535);
+
+  if (!editing) {
+    return (
+      <div className="port-editor">
+        <div className="port-editor-main mono">
+          {effectivePort != null ? `:${effectivePort}` : "—"}
+        </div>
+        <div className="panel-hint">
+          {hasOverride
+            ? `用户指定端口。自动检测值: ${detectedPort != null ? `:${detectedPort}` : "无"}`
+            : detectedPort != null
+              ? "使用自动检测端口。"
+              : "未检测到端口。可以手动指定启动端口。"}
+        </div>
+        {conflictPeers.length > 0 && (
+          <div className="panel-hint" style={{ color: "var(--c-warn)" }}>
+            当前端口与 {conflictPeers.length} 个项目冲突，建议改为未占用端口。
+          </div>
+        )}
+        <div className="sc-actions" style={{ paddingTop: 10, borderTop: 0 }}>
+          <button
+            type="button"
+            className="run-btn is-ghost"
+            onClick={() => {
+              setDraft(String(configuredPort ?? effectivePort ?? ""));
+              setEditing(true);
+            }}
+          >
+            修改端口
+          </button>
+          {hasOverride && (
+            <button type="button" className="run-btn is-ghost" onClick={() => onSave(null)}>
+              恢复自动检测
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="port-editor">
+      <input
+        className="editable-input mono"
+        type="number"
+        min={1}
+        max={65535}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        autoFocus
+        placeholder={detectedPort != null ? String(detectedPort) : "3000"}
+      />
+      <div className="panel-hint">
+        这个值会作为项目的默认端口，用于访问地址、冲突检测和启动时的 PORT 环境变量。
+      </div>
+      {invalid && (
+        <div className="panel-hint" style={{ color: "var(--c-err)" }}>
+          请输入 1 到 65535 之间的整数。
+        </div>
+      )}
+      <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+        <button
+          type="button"
+          className="run-btn is-open"
+          disabled={invalid}
+          onClick={() => {
+            const text = draft.trim();
+            onSave(text === "" ? null : Number(text));
+            setEditing(false);
+          }}
+        >
+          保存
+        </button>
+        <button type="button" className="run-btn is-ghost" onClick={() => setEditing(false)}>
+          取消
+        </button>
+      </div>
     </div>
   );
 }
