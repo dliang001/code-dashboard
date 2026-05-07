@@ -21,6 +21,57 @@ function fromScripts(scripts: Record<string, string>): number | null {
   return null;
 }
 
+function depNames(pkg: {
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+}): Set<string> {
+  return new Set([
+    ...Object.keys(pkg.dependencies ?? {}),
+    ...Object.keys(pkg.devDependencies ?? {}),
+  ]);
+}
+
+function fromNodeDeps(deps: Set<string>): number | null {
+  if (deps.has("vite") || deps.has("@vitejs/plugin-react") || deps.has("@vitejs/plugin-vue")) return 5173;
+  if (deps.has("next")) return 3000;
+  if (deps.has("nuxt")) return 3000;
+  if (deps.has("astro")) return 4321;
+  if (deps.has("@sveltejs/kit")) return 5173;
+  return null;
+}
+
+async function fromNestedPackageScripts(dir: string): Promise<number | null> {
+  const candidates = [
+    ["apps", "web"],
+    ["apps", "frontend"],
+    ["packages", "web"],
+    ["packages", "frontend"],
+    ["web"],
+    ["frontend"],
+    ["client"],
+  ];
+
+  for (const parts of candidates) {
+    const raw = await readSafe(path.join(dir, ...parts, "package.json"));
+    if (!raw) continue;
+    try {
+      const pkg = JSON.parse(raw) as {
+        scripts?: Record<string, string>;
+        dependencies?: Record<string, string>;
+        devDependencies?: Record<string, string>;
+      };
+      if (!pkg.scripts) continue;
+      const port = fromScripts(pkg.scripts);
+      if (port !== null) return port;
+      const fromDeps = fromNodeDeps(depNames(pkg));
+      if (fromDeps !== null) return fromDeps;
+    } catch {
+      // ignore malformed child package files
+    }
+  }
+  return null;
+}
+
 function fromViteConfig(content: string): number | null {
   const m = content.match(/port\s*:\s*(\d{2,5})/);
   return m ? parseInt(m[1]!, 10) : null;
@@ -31,6 +82,15 @@ function fromEnv(content: string): number | null {
     const m = line.match(/^\s*(?:VITE_|NEXT_PUBLIC_)?PORT\s*=\s*(\d{2,5})\s*$/);
     if (m) return parseInt(m[1]!, 10);
   }
+  return null;
+}
+
+function fromPythonText(content: string): number | null {
+  const lower = content.toLowerCase();
+  const explicit = lower.match(/(?:port|flask_run_port)\s*=\s*["']?(\d{2,5})/);
+  if (explicit) return parseInt(explicit[1]!, 10);
+  if (/\buvicorn\b|\bfastapi\b/.test(lower)) return 8000;
+  if (/\bflask\b/.test(lower)) return 5000;
   return null;
 }
 
@@ -55,15 +115,25 @@ export async function detectPort(dir: string): Promise<number | null> {
   const pkgRaw = await readSafe(path.join(dir, "package.json"));
   if (pkgRaw) {
     try {
-      const pkg = JSON.parse(pkgRaw) as { scripts?: Record<string, string> };
+      const pkg = JSON.parse(pkgRaw) as {
+        scripts?: Record<string, string>;
+        dependencies?: Record<string, string>;
+        devDependencies?: Record<string, string>;
+      };
       if (pkg.scripts) {
         const fromS = fromScripts(pkg.scripts);
         if (fromS !== null) return fromS;
       }
+      const fromDeps = fromNodeDeps(depNames(pkg));
+      if (fromDeps !== null) return fromDeps;
     } catch { /* ignore */ }
   }
 
-  // 2. vite.config.{ts,js,mjs}
+  // 2. Common monorepo app packages, e.g. root script delegates to apps/web.
+  const fromNested = await fromNestedPackageScripts(dir);
+  if (fromNested !== null) return fromNested;
+
+  // 3. vite.config.{ts,js,mjs}
   for (const fn of ["vite.config.ts", "vite.config.js", "vite.config.mjs"]) {
     const c = await readSafe(path.join(dir, fn));
     if (c) {
@@ -72,7 +142,7 @@ export async function detectPort(dir: string): Promise<number | null> {
     }
   }
 
-  // 3. .env files
+  // 4. .env files
   for (const fn of [".env.local", ".env"]) {
     const c = await readSafe(path.join(dir, fn));
     if (c) {
@@ -81,7 +151,16 @@ export async function detectPort(dir: string): Promise<number | null> {
     }
   }
 
-  // 4. docker-compose
+  // 5. Python framework defaults / explicit app.run(port=...)
+  for (const fn of ["requirements.txt", "pyproject.toml", "app.py", "main.py"]) {
+    const c = await readSafe(path.join(dir, fn));
+    if (c) {
+      const v = fromPythonText(c);
+      if (v !== null) return v;
+    }
+  }
+
+  // 6. docker-compose
   for (const fn of ["docker-compose.yml", "docker-compose.yaml"]) {
     const c = await readSafe(path.join(dir, fn));
     if (c) {

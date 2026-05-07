@@ -13,9 +13,21 @@ function setup(initial = "/") {
   return render(
     <MemoryRouter initialEntries={[initial]}>
       <Routes>
-        <Route path="/" element={<><FilterBar languages={["node", "python", "docker"]} counts={{ all: 10, archived: 2, conflicts: 1 }} /><Probe /></>} />
+        <Route
+          path="/"
+          element={
+            <>
+              <FilterBar
+                languages={["node", "python", "docker"]}
+                statusCounts={{ all: 10, running: 3, idle: 6, error: 1 }}
+                archivedCount={2}
+              />
+              <Probe />
+            </>
+          }
+        />
       </Routes>
-    </MemoryRouter>
+    </MemoryRouter>,
   );
 }
 
@@ -23,7 +35,7 @@ describe("FilterBar", () => {
   it("typing in search box updates URL ?q=", async () => {
     setup();
     const user = userEvent.setup();
-    await user.type(screen.getByPlaceholderText(/搜索/i), "hair");
+    await user.type(screen.getByRole("searchbox"), "hair");
     expect(screen.getByTestId("qs").textContent).toContain("q=hair");
   });
 
@@ -34,9 +46,9 @@ describe("FilterBar", () => {
     expect(screen.getByTestId("qs").textContent).toContain("lang=python");
   });
 
-  it("renders count chips", () => {
+  it("renders status + archived chips with counts", () => {
     setup();
-    expect(screen.getByText(/全部 10/)).toBeInTheDocument();
-    expect(screen.getByText(/已归档 2/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /运行中 3/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /含归档 2/ })).toBeInTheDocument();
   });
 });

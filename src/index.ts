@@ -10,6 +10,7 @@ import { enrichAll } from "./metadata/index.js";
 import { loadProjects } from "./store/projects.js";
 import { getDashboardPaths } from "./config.js";
 import { ProbeCache, probeAll } from "./probe/port.js";
+import { ProcessManager } from "./runner/process.js";
 
 interface CliArgs {
   root?: string;
@@ -56,6 +57,7 @@ async function main() {
   }
 
   const probeCache = new ProbeCache();
+  const processManager = new ProcessManager();
   // Resolve to <project-root>/web/dist relative to dist/index.js (or src/index.ts in dev)
   const here = fileURLToPath(new URL(".", import.meta.url));
   const webDist = path.resolve(here, "..", "web", "dist");
@@ -67,7 +69,28 @@ async function main() {
     logger: true,
     webDist: webDistExists ? webDist : undefined,
     probeCache,
+    processManager,
   });
+
+  // Tear down all managed children on dashboard exit so the user doesn't
+  // end up with orphaned `npm run dev` processes after Ctrl+C.
+  let shuttingDown = false;
+  const shutdown = async (signal: string) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log(`\nReceived ${signal}, stopping managed processes...`);
+    try {
+      await processManager.shutdown();
+    } catch (err) {
+      console.error("shutdown error:", err);
+    }
+    try {
+      await server.close();
+    } catch { /* ignore */ }
+    process.exit(0);
+  };
+  process.on("SIGINT", () => void shutdown("SIGINT"));
+  process.on("SIGTERM", () => void shutdown("SIGTERM"));
 
   // Auto-scan on first run so GET /api/projects has data immediately.
   const existing = await loadProjects(paths.projectsFile);
@@ -92,9 +115,9 @@ async function main() {
   const stored = await loadProjects(paths.projectsFile);
   const projectsForProbe = stored?.projects ?? [];
   if (projectsForProbe.length > 0) {
-    void probeAll(projectsForProbe, probeCache).catch(() => {});
+    void probeAll(projectsForProbe, probeCache, processManager).catch(() => {});
     setInterval(() => {
-      void probeAll(projectsForProbe, probeCache).catch(() => {});
+      void probeAll(projectsForProbe, probeCache, processManager).catch(() => {});
     }, 30_000);
   }
 }

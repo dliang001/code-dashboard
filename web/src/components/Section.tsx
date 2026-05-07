@@ -1,14 +1,21 @@
 interface Props {
   label: string;
   children: React.ReactNode;
+  /** Tone color via CSS class — used by overview's port-conflict panel. */
+  tone?: "warn";
   className?: string;
 }
 
-export function Section({ label, children, className = "" }: Props) {
+/**
+ * Editorial panel — small-caps header strip + body.
+ * Used for every section on the Detail page.
+ */
+export function Section({ label, children, tone, className = "" }: Props) {
+  const cls = ["panel", tone ? `is-${tone}` : "", className].filter(Boolean).join(" ");
   return (
-    <div className={`bg-white border border-gray-200 rounded-lg p-3.5 ${className}`}>
-      <div className="text-[10px] font-medium tracking-wide uppercase text-gray-500 mb-1.5">{label}</div>
-      {children}
-    </div>
+    <section className={cls}>
+      <div className="panel-head mono">{label}</div>
+      <div className="panel-body">{children}</div>
+    </section>
   );
 }

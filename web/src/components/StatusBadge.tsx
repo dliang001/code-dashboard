@@ -1,33 +1,68 @@
 import type { RunState } from "../types";
 
-interface Props {
-  state: RunState | "unknown";
+interface StatusMeta {
+  dotVar: string;
+  label: string;
+  pulse: boolean;
 }
 
-const LABELS: Record<RunState | "unknown", string> = {
-  idle: "○ 已停止",
-  starting: "○ 启动中…",
-  running: "● 运行中",
-  "running-external": "● 运行中（外）",
-  stopping: "○ 停止中",
-  error: "✕ 错误",
-  unknown: "○ 未知",
+const META: Record<RunState | "unknown", StatusMeta> = {
+  running:           { dotVar: "var(--c-ok)",   label: "RUNNING",  pulse: true  },
+  "running-external":{ dotVar: "var(--c-ext)",  label: "EXTERNAL", pulse: true  },
+  starting:          { dotVar: "var(--c-warn)", label: "STARTING", pulse: true  },
+  stopping:          { dotVar: "var(--c-warn)", label: "STOPPING", pulse: false },
+  error:             { dotVar: "var(--c-err)",  label: "ERROR",    pulse: true  },
+  idle:              { dotVar: "var(--c-mute)", label: "IDLE",     pulse: false },
+  unknown:           { dotVar: "var(--c-mute)", label: "UNKNOWN",  pulse: false },
 };
 
-const STYLES: Record<RunState | "unknown", string> = {
-  running: "bg-green-100 text-green-700 border-green-200",
-  "running-external": "bg-green-50 text-green-600 border-green-100",
-  starting: "bg-yellow-50 text-yellow-700 border-yellow-200",
-  stopping: "bg-yellow-50 text-yellow-700 border-yellow-200",
-  error: "bg-red-100 text-red-700 border-red-200",
-  idle: "bg-gray-100 text-gray-600 border-gray-200",
-  unknown: "bg-gray-50 text-gray-500 border-gray-200",
-};
+interface DotProps {
+  state: RunState | "unknown";
+  size?: number;
+  /** Override the auto-derived pulse setting (e.g., suppress in compact contexts). */
+  pulse?: boolean;
+}
 
-export function StatusBadge({ state }: Props) {
+export function StatusDot({ state, size = 8, pulse }: DotProps) {
+  const m = META[state] ?? META.idle;
+  const shouldPulse = pulse ?? m.pulse;
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 text-xs rounded-full border ${STYLES[state]}`}>
-      {LABELS[state]}
+    <span
+      className={`status-dot ${shouldPulse ? "is-pulse" : ""}`}
+      style={
+        {
+          ["--dot-c" as string]: m.dotVar,
+          width: size,
+          height: size,
+        } as React.CSSProperties
+      }
+      aria-hidden
+    />
+  );
+}
+
+interface BadgeProps {
+  state: RunState | "unknown";
+  /** Compact mode renders only the dot — used in tight metas. */
+  compact?: boolean;
+}
+
+/**
+ * Status indicator: pulsing dot + small-caps label.
+ * Color is the only carrier of distinction between states.
+ */
+export function StatusBadge({ state, compact = false }: BadgeProps) {
+  if (compact) return <StatusDot state={state} />;
+  const m = META[state] ?? META.idle;
+  return (
+    <span className="status-label" style={{ color: m.dotVar }}>
+      <StatusDot state={state} />
+      <span className="mono">{m.label}</span>
     </span>
   );
+}
+
+/** Direct access to label/color metadata for headings, etc. */
+export function statusMeta(state: RunState | "unknown") {
+  return META[state] ?? META.idle;
 }

@@ -34,7 +34,7 @@ export function useRescan() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: api.rescan,
-    onSuccess: () => {
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: [KEY] });
     },
   });

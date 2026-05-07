@@ -10,6 +10,9 @@
     "build:web": "cd web && npm install && npm run build",
     "build": "tsc -p . && npm run build:web",
     "start": "node dist/index.js",
+    "launch": "powershell -NoProfile -ExecutionPolicy Bypass -File ./bin/dashboard.ps1",
+    "stop": "powershell -NoProfile -ExecutionPolicy Bypass -File ./bin/stop-dashboard.ps1",
+    "install-shortcut": "powershell -NoProfile -ExecutionPolicy Bypass -File ./bin/install-shortcut.ps1",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"

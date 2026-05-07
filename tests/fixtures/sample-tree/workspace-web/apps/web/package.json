@@ -1,0 +1,6 @@
+{
+  "name": "@sample/web",
+  "scripts": {
+    "dev": "nuxt dev --port 3100"
+  }
+}

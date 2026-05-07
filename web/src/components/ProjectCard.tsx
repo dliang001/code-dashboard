@@ -1,121 +1,193 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
-import type { Project, RunState } from "../types";
-import { StatusBadge } from "./StatusBadge";
-import { formatPort, formatRelative, projectEmoji } from "../lib/format";
+import { useNavigate } from "react-router-dom";
+import type { Project, RunningInfo, RunState } from "../types";
+import { StatusDot, StatusBadge } from "./StatusBadge";
+import { IconBtn, IconPlay, IconStop, IconPlayHollow, IconCode, IconFolder } from "./IconBtn";
+import { useStartProject, useStopProject } from "../hooks/useRunner";
+import * as api from "../api";
+import { useMutation } from "@tanstack/react-query";
+import { formatRelative, projectKindGlyph, projectKindLabel } from "../lib/format";
 
 interface Props {
   project: Project;
   runState: RunState;
-  /** When project is a parent, list of its children (already filtered). Empty for leaves. */
-  children?: Project[];
-  /** runStates keyed by id, for child cards' badges */
-  childRunStates?: Record<string, RunState>;
-  /** True if this project's port is shared with another project */
-  isInConflict?: boolean;
-  /** ids of other projects sharing the same port */
+  running?: RunningInfo | null;
+  childCount?: number;
   conflictPeerIds?: string[];
 }
 
-export function ProjectCard({
+/**
+ * One row in the main project list. Seven columns:
+ *   rail · identity · stack/tags · port · status · time/branch · actions
+ */
+export function ProjectRow({
   project,
   runState,
-  children = [],
-  childRunStates = {},
-  isInConflict = false,
+  running = null,
+  childCount = 0,
   conflictPeerIds = [],
 }: Props) {
-  const [expanded, setExpanded] = useState(false);
-  const description = project.description ?? project.descriptionAuto ?? "";
-  const dim = project.archived ? "opacity-60" : "";
-  const detailHref = `/project/${encodeURIComponent(project.id)}`;
+  const nav = useNavigate();
+  const start = useStartProject(project.id);
+  const stop = useStopProject(project.id);
+  const openVS = useMutation({ mutationFn: () => api.openVSCode(project.id) });
+  const openFolder = useMutation({ mutationFn: () => api.openFolder(project.id) });
+
   const port = project.port ?? project.portDetected;
-  const hasChildren = children.length > 0;
-  const conflictBorder = isInConflict ? "border-red-300 ring-1 ring-red-200" : "border-gray-200";
+  const inConflict = conflictPeerIds.length > 0;
+  const isRunning =
+    runState === "running" || runState === "running-external" || runState === "starting";
+  const accessUrl = pickAccessUrl(running, port, runState);
+  const isManaged = running != null && running.state !== "exited";
+  const hasCommand = !!(project.startCommand || project.startCommandDetected);
+  const detailHref = `/project/${encodeURIComponent(project.id)}`;
+  const cls = [
+    "row",
+    project.archived ? "is-archived" : "",
+    inConflict ? "is-conflict" : "",
+  ].filter(Boolean).join(" ");
 
   return (
-    <div className={`bg-white border ${conflictBorder} rounded-lg overflow-hidden ${dim}`}>
-      <div className="p-3.5">
-        <div className="flex items-center justify-between mb-1.5 gap-2">
-          <Link to={detailHref} className="flex items-center gap-2 min-w-0 flex-1 hover:underline">
-            <span className="text-base flex-shrink-0">{projectEmoji(project.kind)}</span>
-            <span className="font-medium text-sm truncate">{project.name}</span>
-          </Link>
-          <StatusBadge state={runState} />
+    <div
+      className={cls}
+      role="button"
+      tabIndex={0}
+      onClick={() => nav(detailHref)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") nav(detailHref);
+      }}
+    >
+      <div className="row-rail">
+        <StatusDot state={runState} size={12} />
+      </div>
+
+      <div className="row-id">
+        <div className="row-name-line">
+          <span className="row-kind mono" title={projectKindLabel(project.kind)}>
+            {projectKindGlyph(project.kind)}
+          </span>
+          <span className="row-name">{project.name}</span>
+          {childCount > 0 && (
+            <span className="row-children-pill mono">+{childCount}</span>
+          )}
         </div>
+        <div className="row-desc">
+          {project.description ?? project.descriptionAuto ?? (
+            <span className="muted-italic">— 无描述</span>
+          )}
+        </div>
+      </div>
 
-        <p className="text-xs text-gray-600 leading-snug line-clamp-2 min-h-[2.25rem]">
-          {description || <span className="italic text-gray-400">无描述</span>}
-        </p>
-
-        {(project.frameworks.length > 0 || project.tags.length > 0) && (
-          <div className="flex flex-wrap gap-1 mt-2">
-            {project.frameworks.map((f) => (
-              <span key={`fw-${f}`} className="text-[10px] px-1.5 py-0.5 bg-gray-100 text-gray-700 rounded">{f}</span>
-            ))}
+      <div className="row-meta">
+        <div className="meta-line">
+          <span className="meta-kind mono">{projectKindLabel(project.kind)}</span>
+          {project.frameworks.slice(0, 2).map((f) => (
+            <span key={f} className="meta-fw mono">{f}</span>
+          ))}
+        </div>
+        {project.tags.length > 0 && (
+          <div className="meta-tags">
             {project.tags.map((t) => (
-              <span key={`tag-${t}`} className="text-[10px] px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded">{t}</span>
+              <span key={t} className="tag mono">#{t}</span>
             ))}
           </div>
-        )}
-
-        {isInConflict && conflictPeerIds.length > 0 && (
-          <div className="mt-2 text-[11px] text-red-700 bg-red-50 border border-red-200 rounded px-2 py-1">
-            ⚠ 端口 :{port} 与 {conflictPeerIds.join("、")} 冲突
-          </div>
-        )}
-
-        <div className="flex items-center justify-between text-[11px] text-gray-500 mt-2 pt-2 border-t border-gray-100">
-          <span className={isInConflict ? "text-red-700 font-medium" : ""}>{formatPort(port)}</span>
-          <span>{formatRelative(project.lastModified)}</span>
-        </div>
-
-        {hasChildren && (
-          <button
-            type="button"
-            onClick={() => setExpanded((v) => !v)}
-            className="mt-2 w-full text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-50 border border-gray-200 rounded py-1 transition"
-            aria-expanded={expanded}
-          >
-            {expanded ? "▴ 收起" : "▾"} {children.length} 个子项目
-          </button>
         )}
       </div>
 
-      {hasChildren && expanded && (
-        <div className="border-t border-gray-200 bg-gray-50 px-3 py-3">
-          <div className="grid gap-2 grid-cols-1 sm:grid-cols-2">
-            {children.map((c) => (
-              <ChildCard
-                key={c.id}
-                project={c}
-                runState={childRunStates[c.id] ?? "idle"}
-              />
-            ))}
-          </div>
-        </div>
-      )}
+      <div className="row-port">
+        {port != null ? (
+          <>
+            <div className={`port-num mono ${inConflict ? "is-conflict" : ""}`}>:{port}</div>
+            {accessUrl ? (
+              <a
+                href={accessUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="port-link mono"
+              >
+                localhost ↗
+              </a>
+            ) : (
+              <div className="port-link mono is-dim">localhost</div>
+            )}
+            {inConflict && (
+              <div
+                className="conflict-flag mono"
+                title={`冲突: ${conflictPeerIds.join(", ")}`}
+              >
+                ⚠ ×{conflictPeerIds.length + 1}
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="port-link mono is-dim">—</div>
+        )}
+      </div>
+
+      <div className="row-status">
+        <StatusBadge state={runState} />
+        {isManaged && running && running.state === "running" && (
+          <>
+            <div className="row-uptime mono">PID {running.pid}</div>
+          </>
+        )}
+      </div>
+
+      <div className="row-time mono">
+        {formatRelative(project.lastModified)}
+        {project.gitBranch && <div className="row-branch mono">⎇ {project.gitBranch}</div>}
+      </div>
+
+      <div className="row-actions" onClick={(e) => e.stopPropagation()}>
+        {hasCommand ? (
+          isManaged ? (
+            <IconBtn
+              title="停止"
+              danger
+              onClick={() => stop.mutate()}
+              disabled={stop.isPending}
+            >
+              {IconStop}
+            </IconBtn>
+          ) : (
+            <IconBtn
+              title={isRunning ? "外部进程占用 — 启动将自动换端口" : "启动"}
+              accent
+              onClick={() => start.mutate()}
+              disabled={start.isPending}
+            >
+              {IconPlay}
+            </IconBtn>
+          )
+        ) : (
+          <IconBtn title="未配置启动命令" disabled>
+            {IconPlayHollow}
+          </IconBtn>
+        )}
+        <IconBtn title="VS Code 打开" onClick={() => openVS.mutate()}>
+          {IconCode}
+        </IconBtn>
+        <IconBtn title="资源管理器" onClick={() => openFolder.mutate()}>
+          {IconFolder}
+        </IconBtn>
+      </div>
     </div>
   );
 }
 
-function ChildCard({ project, runState }: { project: Project; runState: RunState }) {
-  const description = project.description ?? project.descriptionAuto ?? "";
-  const port = project.port ?? project.portDetected;
-  const detailHref = `/project/${encodeURIComponent(project.id)}`;
-  return (
-    <Link to={detailHref} className="block bg-white border border-gray-200 rounded p-2 hover:border-gray-300 hover:shadow-sm transition">
-      <div className="flex items-center justify-between mb-1 gap-1">
-        <div className="flex items-center gap-1.5 min-w-0">
-          <span className="text-xs">{projectEmoji(project.kind)}</span>
-          <span className="font-medium text-xs truncate">{project.name}</span>
-        </div>
-        <StatusBadge state={runState} />
-      </div>
-      {description && (
-        <p className="text-[11px] text-gray-600 line-clamp-1">{description}</p>
-      )}
-      <div className="text-[10px] text-gray-500 mt-0.5">{formatPort(port)}</div>
-    </Link>
-  );
+// Back-compat alias — the old name is still imported by tests and a few callers.
+export const ProjectCard = ProjectRow;
+
+/** Verified-from-logs URL when we have one; fall back to localhost:<port> when running. */
+function pickAccessUrl(
+  running: RunningInfo | null,
+  port: number | null | undefined,
+  runState: RunState,
+): string | null {
+  const urls = running?.urls ?? [];
+  if (urls.length > 0) return urls[0]!;
+  const isRunning =
+    runState === "running" || runState === "running-external" || runState === "starting";
+  if (isRunning && port != null) return `http://localhost:${port}`;
+  return null;
 }

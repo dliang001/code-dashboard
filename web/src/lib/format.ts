@@ -20,15 +20,34 @@ export function formatPort(port: number | null): string {
   return `:${port}`;
 }
 
-export function projectEmoji(kind: ProjectKind): string {
+/** Geometric ASCII-ish kind glyph — no emoji, plays well with the cosmic-console palette. */
+export function projectKindGlyph(kind: ProjectKind): string {
   switch (kind) {
-    case "node": return "🟢";
-    case "python": return "🐍";
-    case "docker": return "🐳";
-    case "rust": return "🦀";
-    case "go": return "🐹";
-    case "self-runnable-parent":
-    case "parent-container": return "📂";
-    default: return "📦";
+    case "node": return "◆";
+    case "python": return "◇";
+    case "docker": return "▣";
+    case "rust": return "▲";
+    case "go": return "▶";
+    case "self-runnable-parent": return "⬣";
+    case "parent-container": return "⬢";
+    default: return "□";
   }
+}
+
+export function projectKindLabel(kind: ProjectKind): string {
+  switch (kind) {
+    case "node": return "Node";
+    case "python": return "Python";
+    case "docker": return "Docker";
+    case "rust": return "Rust";
+    case "go": return "Go";
+    case "self-runnable-parent": return "Workspace";
+    case "parent-container": return "Parent";
+    default: return "Unknown";
+  }
+}
+
+/** Old emoji helper retained for backward compat in any unconverted spots. */
+export function projectEmoji(kind: ProjectKind): string {
+  return projectKindGlyph(kind);
 }

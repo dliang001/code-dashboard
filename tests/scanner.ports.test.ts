@@ -30,6 +30,21 @@ describe("detectPort", () => {
     expect(port).toBe(8080);
   });
 
+  it("extracts port from a common workspace web package", async () => {
+    const port = await detectPort(path.join(FIX, "workspace-web"));
+    expect(port).toBe(3100);
+  });
+
+  it("falls back to the Next.js default port", async () => {
+    const port = await detectPort(path.join(FIX, "default-next"));
+    expect(port).toBe(3000);
+  });
+
+  it("falls back to the Flask default port", async () => {
+    const port = await detectPort(path.join(FIX, "default-flask"));
+    expect(port).toBe(5000);
+  });
+
   it("returns null when no port info present", async () => {
     const port = await detectPort(path.join(FIX, "rust-app"));
     expect(port).toBeNull();

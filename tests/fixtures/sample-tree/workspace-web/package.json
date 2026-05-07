@@ -1,0 +1,6 @@
+{
+  "scripts": {
+    "dev": "concurrently \"npm run web:dev\" \"npm run worker:dev\"",
+    "web:dev": "pnpm --filter @sample/web dev"
+  }
+}

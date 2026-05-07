@@ -1,97 +1,151 @@
 import { useMemo } from "react";
 import { useProjects } from "../hooks/useProjects";
-import { useFilters } from "../hooks/useFilters";
-import { ProjectCard } from "../components/ProjectCard";
+import { useFilters, type StatusFilter } from "../hooks/useFilters";
+import { ProjectRow } from "../components/ProjectCard";
 import { EmptyState } from "../components/EmptyState";
 import { FilterBar } from "../components/FilterBar";
 import { ConflictBanner } from "../components/ConflictBanner";
 import { applyFilters, sortProjects } from "../lib/filter";
-import type { Project } from "../types";
+import type { Project, RunState } from "../types";
 
-export default function Grid() {
+interface Props {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  onOpenLogs?: (id: string) => void;
+}
+
+function isRunningState(s: RunState | undefined): boolean {
+  return s === "running" || s === "starting" || s === "running-external";
+}
+
+function isIdleState(s: RunState | undefined): boolean {
+  return !s || s === "idle" || s === "stopping";
+}
+
+export default function Grid(_props: Props) {
   const { data, isLoading, error } = useProjects();
   const [filters] = useFilters();
 
-  const { topLevel, total, languages, counts, conflictsByPort, childrenByParent } = useMemo(() => {
+  const {
+    visible,
+    languages,
+    statusCounts,
+    archivedCount,
+    conflictsByPort,
+    childCountByParent,
+  } = useMemo(() => {
     const all: Project[] = data?.projects ?? [];
-    const langs = Array.from(new Set(all.map((p) => p.language).filter((l): l is string => !!l))).sort();
-    // Show ONLY top-level (parent === null) in the main grid.
+    const runStates = data?.runStates ?? {};
     const tops = all.filter((p) => p.parent === null);
-    const filteredList = applyFilters(tops, {
+
+    const langs = Array.from(
+      new Set(all.map((p) => p.language).filter((l): l is string => !!l)),
+    ).sort();
+
+    // Status filter applies on top of search/language/archived.
+    const baseFiltered = applyFilters(tops, {
       search: filters.search,
       language: filters.language,
       showArchived: filters.showArchived,
     });
-    const sorted = sortProjects(filteredList, filters.sort);
-    const cnt = {
+    const statusFiltered = baseFiltered.filter((p) => {
+      if (filters.status === "all") return true;
+      const s = runStates[p.id];
+      if (filters.status === "running") return isRunningState(s);
+      if (filters.status === "idle") return isIdleState(s);
+      if (filters.status === "error") return s === "error";
+      return true;
+    });
+    const sorted = sortProjects(statusFiltered, filters.sort);
+
+    const counts: Record<StatusFilter, number> = {
       all: tops.length,
-      archived: tops.filter((p) => p.archived).length,
-      conflicts: data?.conflicts.length ?? 0,
+      running: tops.filter((p) => isRunningState(runStates[p.id])).length,
+      idle: tops.filter((p) => isIdleState(runStates[p.id])).length,
+      error: tops.filter((p) => runStates[p.id] === "error").length,
     };
+
     const conflictMap = new Map<number, Set<string>>();
-    for (const c of (data?.conflicts ?? [])) {
-      conflictMap.set(c.port, new Set(c.projectIds));
+    for (const c of data?.conflicts ?? []) conflictMap.set(c.port, new Set(c.projectIds));
+
+    const childCount = new Map<string, number>();
+    for (const p of all) {
+      if (p.parent) childCount.set(p.parent, (childCount.get(p.parent) ?? 0) + 1);
     }
-    const childIndex = new Map<string, Project[]>();
-    for (const proj of all) {
-      if (proj.parent) {
-        const list = childIndex.get(proj.parent) ?? [];
-        list.push(proj);
-        childIndex.set(proj.parent, list);
-      }
-    }
+
     return {
-      topLevel: sorted,
-      total: tops.length,
+      visible: sorted,
       languages: langs,
-      counts: cnt,
+      statusCounts: counts,
+      archivedCount: tops.filter((p) => p.archived).length,
       conflictsByPort: conflictMap,
-      childrenByParent: childIndex,
+      childCountByParent: childCount,
     };
   }, [data, filters]);
 
-  if (isLoading) return <Shell><p className="text-gray-500">加载中…</p></Shell>;
-  if (error) return <Shell><p className="text-red-600">加载失败：{(error as Error).message}</p></Shell>;
-  if (!data || data.projects.length === 0) {
+  if (isLoading) {
     return (
-      <Shell>
-        <EmptyState title="还没有扫描到项目" body="点右上角『重新扫描』开始" />
-      </Shell>
+      <div className="empty-state">
+        <div className="empty-glyph mono">···</div>
+        <div className="empty-title">加载中</div>
+      </div>
     );
   }
+  if (error) {
+    return (
+      <div className="empty-state">
+        <div className="empty-glyph mono">!</div>
+        <div className="empty-title">加载失败</div>
+        <div className="empty-sub">{(error as Error).message}</div>
+      </div>
+    );
+  }
+  if (!data || data.projects.length === 0) {
+    return <EmptyState title="还没有扫描到项目" body="点右上角『RESCAN』开始" />;
+  }
+  const runStates = data.runStates;
+  const runningMap = data.running;
 
   return (
     <>
       <ConflictBanner conflicts={data.conflicts} />
-      <FilterBar languages={languages} counts={counts} />
-      <main className="px-5 py-5">
-        <p className="text-xs text-gray-500 mb-3">显示 {topLevel.length} / {total} 个顶层项目</p>
-        <div className="grid gap-3.5 grid-cols-[repeat(auto-fill,minmax(340px,1fr))]">
-          {topLevel.map((p) => (
-            <ProjectCard
-              key={p.id}
-              project={p}
-              runState={data.runStates[p.id] ?? "idle"}
-              children={childrenByParent.get(p.id) ?? []}
-              childRunStates={data.runStates}
-              isInConflict={isInConflict(p, conflictsByPort)}
-              conflictPeerIds={getConflictPeers(p, conflictsByPort)}
-            />
-          ))}
+      <FilterBar
+        languages={languages}
+        statusCounts={statusCounts}
+        archivedCount={archivedCount}
+      />
+      <div className="list">
+        <div className="list-head mono">
+          <div aria-hidden></div>
+          <div>PROJECT · DESCRIPTION</div>
+          <div>STACK · TAGS</div>
+          <div>PORT</div>
+          <div>STATE</div>
+          <div>TOUCHED</div>
+          <div style={{ textAlign: "right" }}>RUN</div>
         </div>
-      </main>
+        {visible.length === 0 ? (
+          <div className="empty-state">
+            <div className="empty-glyph mono">∅</div>
+            <div className="empty-title">无匹配项目</div>
+            <div className="empty-sub">尝试清空筛选条件，或重新扫描工作目录</div>
+          </div>
+        ) : (
+          <div className="list-body">
+            {visible.map((p) => (
+              <ProjectRow
+                key={p.id}
+                project={p}
+                runState={runStates[p.id] ?? "idle"}
+                running={runningMap[p.id] ?? null}
+                childCount={childCountByParent.get(p.id) ?? 0}
+                conflictPeerIds={getConflictPeers(p, conflictsByPort)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
     </>
   );
-}
-
-function Shell({ children }: { children: React.ReactNode }) {
-  return <main className="p-5">{children}</main>;
-}
-
-function isInConflict(p: Project, map: Map<number, Set<string>>): boolean {
-  const port = p.port ?? p.portDetected;
-  if (port == null) return false;
-  return map.has(port);
 }
 
 function getConflictPeers(p: Project, map: Map<number, Set<string>>): string[] {

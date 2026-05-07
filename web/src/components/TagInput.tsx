@@ -10,7 +10,10 @@ export function TagInput({ tags, onChange }: Props) {
 
   const add = () => {
     const t = draft.trim();
-    if (!t || tags.includes(t)) { setDraft(""); return; }
+    if (!t || tags.includes(t)) {
+      setDraft("");
+      return;
+    }
     onChange([...tags, t]);
     setDraft("");
   };
@@ -18,11 +21,18 @@ export function TagInput({ tags, onChange }: Props) {
   const remove = (t: string) => onChange(tags.filter((x) => x !== t));
 
   return (
-    <div className="flex flex-wrap items-center gap-1">
+    <div className="hero-tags">
       {tags.map((t) => (
-        <span key={t} className="text-[11px] px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded inline-flex items-center gap-1">
-          {t}
-          <button type="button" onClick={() => remove(t)} aria-label={`移除 ${t}`} className="hover:text-blue-900">×</button>
+        <span key={t} className="tag" style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+          <span>#{t}</span>
+          <button
+            type="button"
+            onClick={() => remove(t)}
+            aria-label={`移除 ${t}`}
+            style={{ color: "var(--ink-2)", lineHeight: 1 }}
+          >
+            ×
+          </button>
         </span>
       ))}
       <input
@@ -30,14 +40,17 @@ export function TagInput({ tags, onChange }: Props) {
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === "Enter") { e.preventDefault(); add(); }
+          if (e.key === "Enter") {
+            e.preventDefault();
+            add();
+          }
           if (e.key === "Backspace" && draft === "" && tags.length > 0) {
             remove(tags[tags.length - 1]!);
           }
         }}
         onBlur={add}
-        placeholder="+ 添加标签"
-        className="text-xs px-1.5 py-0.5 border border-dashed border-gray-300 rounded outline-none focus:border-gray-500 min-w-[80px]"
+        placeholder="+ 标签"
+        className="tag-input"
       />
     </div>
   );

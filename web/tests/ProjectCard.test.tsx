@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import { ProjectCard } from "../src/components/ProjectCard";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { ProjectRow } from "../src/components/ProjectCard";
 import type { Project } from "../src/types";
 
 function p(over: Partial<Project>): Project {
@@ -18,71 +18,73 @@ function p(over: Partial<Project>): Project {
 }
 
 function withRouter(node: React.ReactNode) {
-  return <MemoryRouter>{node}</MemoryRouter>;
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return (
+    <QueryClientProvider client={qc}>
+      <MemoryRouter>{node}</MemoryRouter>
+    </QueryClientProvider>
+  );
 }
 
-describe("ProjectCard", () => {
+describe("ProjectRow", () => {
   it("renders the name and description", () => {
     const proj = p({ id: "photo", name: "photo", descriptionAuto: "Sample photo project." });
-    render(withRouter(<ProjectCard project={proj} runState="idle" />));
+    render(withRouter(<ProjectRow project={proj} runState="idle" />));
     expect(screen.getByText("photo")).toBeInTheDocument();
     expect(screen.getByText("Sample photo project.")).toBeInTheDocument();
   });
 
   it("prefers user description over auto", () => {
     const proj = p({ id: "x", description: "user wrote this", descriptionAuto: "auto wrote that" });
-    render(withRouter(<ProjectCard project={proj} runState="idle" />));
+    render(withRouter(<ProjectRow project={proj} runState="idle" />));
     expect(screen.getByText("user wrote this")).toBeInTheDocument();
     expect(screen.queryByText("auto wrote that")).not.toBeInTheDocument();
   });
 
   it("renders frameworks and tags", () => {
     const proj = p({ id: "x", frameworks: ["next", "react"], tags: ["活跃"] });
-    render(withRouter(<ProjectCard project={proj} runState="idle" />));
+    render(withRouter(<ProjectRow project={proj} runState="idle" />));
     expect(screen.getByText("next")).toBeInTheDocument();
     expect(screen.getByText("react")).toBeInTheDocument();
-    expect(screen.getByText("活跃")).toBeInTheDocument();
-  });
-
-  it("links to detail page using encoded id", () => {
-    const proj = p({ id: "photo/virtual-try-on" });
-    render(withRouter(<ProjectCard project={proj} runState="idle" />));
-    const link = screen.getAllByRole("link")[0] as HTMLAnchorElement;
-    expect(link.getAttribute("href")).toBe("/project/photo%2Fvirtual-try-on");
+    expect(screen.getByText("#活跃")).toBeInTheDocument();
   });
 
   it("uses dim style for archived projects", () => {
     const proj = p({ id: "x", archived: true });
-    const { container } = render(withRouter(<ProjectCard project={proj} runState="idle" />));
-    expect(container.firstChild).toHaveClass("opacity-60");
+    const { container } = render(withRouter(<ProjectRow project={proj} runState="idle" />));
+    expect(container.firstChild).toHaveClass("is-archived");
   });
 
-  it("shows red conflict banner when isInConflict + peers given", () => {
+  it("shows conflict flag when conflictPeerIds given", () => {
     const proj = p({ id: "a", portDetected: 3000 });
-    render(withRouter(<ProjectCard project={proj} runState="idle" isInConflict={true} conflictPeerIds={["b", "c"]} />));
-    expect(screen.getByText(/端口 :3000 与 b、c 冲突/)).toBeInTheDocument();
+    render(
+      withRouter(
+        <ProjectRow
+          project={proj}
+          runState="idle"
+          conflictPeerIds={["b", "c"]}
+        />,
+      ),
+    );
+    // ⚠ ×3 = self + 2 peers
+    expect(screen.getByText(/⚠ ×3/)).toBeInTheDocument();
   });
 
-  it("renders expand button when children given, no button when leaf", () => {
+  it("renders the children pill when childCount > 0", () => {
     const parent = p({ id: "p", name: "p" });
-    const child = p({ id: "p/c", name: "c", parent: "p" });
-    render(withRouter(<ProjectCard project={parent} runState="idle" children={[child]} />));
-    expect(screen.getByRole("button", { name: /1 个子项目/ })).toBeInTheDocument();
+    render(withRouter(<ProjectRow project={parent} runState="idle" childCount={3} />));
+    expect(screen.getByText("+3")).toBeInTheDocument();
   });
 
-  it("expand button reveals child cards", async () => {
+  it("does NOT render children inline (children only on parent's detail page)", () => {
     const parent = p({ id: "p", name: "parent" });
-    const child = p({ id: "p/c", name: "child-name" });
-    render(withRouter(<ProjectCard project={parent} runState="idle" children={[child]} />));
-    const user = userEvent.setup();
+    render(withRouter(<ProjectRow project={parent} runState="idle" childCount={1} />));
     expect(screen.queryByText("child-name")).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /1 个子项目/ }));
-    expect(screen.getByText("child-name")).toBeInTheDocument();
   });
 
-  it("renders real run state badge", () => {
+  it("renders the run-state label", () => {
     const proj = p({ id: "x" });
-    render(withRouter(<ProjectCard project={proj} runState="running-external" />));
-    expect(screen.getByText(/运行中（外）/)).toBeInTheDocument();
+    render(withRouter(<ProjectRow project={proj} runState="running-external" />));
+    expect(screen.getByText("EXTERNAL")).toBeInTheDocument();
   });
 });

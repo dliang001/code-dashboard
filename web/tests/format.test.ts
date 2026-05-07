@@ -36,14 +36,15 @@ describe("formatPort", () => {
   });
 });
 
-describe("projectEmoji", () => {
-  it("returns 🐳 for docker", () => {
-    expect(projectEmoji("docker")).toBe("🐳");
+describe("projectEmoji (geometric glyphs)", () => {
+  // The cosmic-console design uses ASCII-ish geometric markers, not emoji.
+  it("returns ▣ for docker", () => {
+    expect(projectEmoji("docker")).toBe("▣");
   });
-  it("returns 🐍 for python", () => {
-    expect(projectEmoji("python")).toBe("🐍");
+  it("returns ◇ for python", () => {
+    expect(projectEmoji("python")).toBe("◇");
   });
-  it("returns 📦 for unknown kind", () => {
-    expect(projectEmoji("unknown")).toBe("📦");
+  it("returns □ for unknown kind", () => {
+    expect(projectEmoji("unknown")).toBe("□");
   });
 });

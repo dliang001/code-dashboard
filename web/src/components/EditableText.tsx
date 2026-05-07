@@ -13,31 +13,36 @@ export function EditableText({ value, placeholder, multiline = true, onSave }: P
 
   if (!editing) {
     return (
-      <div className="flex items-start gap-2">
-        <div className="flex-1 text-sm leading-relaxed whitespace-pre-wrap">
-          {value ? value : <span className="italic text-gray-400">{placeholder ?? "—"}</span>}
+      <div className="editable-row">
+        <div className="editable-text">
+          {value || (
+            <span className="muted-italic">{placeholder ?? "—"}</span>
+          )}
         </div>
         <button
           type="button"
-          onClick={() => { setDraft(value); setEditing(true); }}
+          className="ghost-btn"
+          onClick={() => {
+            setDraft(value);
+            setEditing(true);
+          }}
           aria-label="编辑"
-          className="text-xs text-blue-600 hover:underline flex-shrink-0"
         >
-          ✎ 编辑
+          <span className="mono">EDIT</span>
         </button>
       </div>
     );
   }
 
   return (
-    <div className="space-y-2">
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       {multiline ? (
         <textarea
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           rows={3}
           autoFocus
-          className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+          className="editable-input"
         />
       ) : (
         <input
@@ -45,22 +50,21 @@ export function EditableText({ value, placeholder, multiline = true, onSave }: P
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           autoFocus
-          className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+          className="editable-input"
         />
       )}
-      <div className="flex gap-1.5 text-xs">
+      <div style={{ display: "flex", gap: 6 }}>
         <button
           type="button"
-          onClick={() => { onSave(draft); setEditing(false); }}
-          className="px-2.5 py-1 bg-gray-900 text-white rounded hover:bg-gray-800"
+          className="run-btn is-open"
+          onClick={() => {
+            onSave(draft);
+            setEditing(false);
+          }}
         >
           保存
         </button>
-        <button
-          type="button"
-          onClick={() => setEditing(false)}
-          className="px-2.5 py-1 border border-gray-300 rounded hover:bg-gray-50"
-        >
+        <button type="button" className="run-btn is-ghost" onClick={() => setEditing(false)}>
           取消
         </button>
       </div>
