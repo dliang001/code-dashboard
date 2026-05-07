@@ -3,6 +3,7 @@ import path from "node:path";
 import { isIgnored } from "./ignored.js";
 import { detectSignals } from "./signals.js";
 import { detectPort } from "./ports.js";
+import { detectUrls } from "./urls.js";
 import type { Project, ProjectKind } from "../types.js";
 
 interface WalkOptions {
@@ -26,6 +27,7 @@ function toId(scanRoot: string, abs: string): string {
 async function buildBareProject(scanRoot: string, abs: string): Promise<Project | null> {
   const sig = await detectSignals(abs);
   const port = await detectPort(abs);
+  const detectedUrls = await detectUrls(abs);
   const id = toId(scanRoot, abs);
   if (sig.kind === "unknown") return null;
   return {
@@ -43,6 +45,7 @@ async function buildBareProject(scanRoot: string, abs: string): Promise<Project 
     startCommandDetected: sig.startCommandDetected,
     port: null,
     portDetected: port,
+    detectedUrls,
     archived: false,
     children: [],
     parent: null,
@@ -100,6 +103,7 @@ export async function walkProjects(scanRoot: string, opts: WalkOptions = {}): Pr
         startCommandDetected: null,
         port: null,
         portDetected: null,
+        detectedUrls: [],
         archived: false,
         children: childProjects.map((c) => c.id),
         parent: null,

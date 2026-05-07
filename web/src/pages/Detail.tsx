@@ -251,6 +251,7 @@ function OverviewTab({
           runState={data.runState}
           desiredPort={data.running?.desiredPort ?? null}
           allocatedPort={data.running?.allocatedPort ?? null}
+          detectedUrls={proj.detectedUrls ?? []}
         />
       </Section>
 

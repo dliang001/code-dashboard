@@ -11,7 +11,7 @@ function bareProject(id: string, abs: string): Project {
     id, path: id, absPath: abs, kind: "node", name: id,
     description: null, descriptionAuto: null, language: "node",
     frameworks: [], tags: [], startCommand: null, startCommandDetected: null,
-    port: null, portDetected: null, archived: false, children: [], parent: null,
+    port: null, portDetected: null, detectedUrls: [], archived: false, children: [], parent: null,
     lastEditedByUser: null, gitBranch: null, lastModified: null,
   };
 }

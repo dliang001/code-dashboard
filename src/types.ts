@@ -46,6 +46,9 @@ export interface Project {
   port: number | null;
   portDetected: number | null;
 
+  /** Auto-detected local URLs from project docs, e.g. tool UIs mounted under a main app. */
+  detectedUrls: string[];
+
   archived: boolean;
 
   /** Children ids (relative paths) for parent containers */

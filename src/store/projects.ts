@@ -65,7 +65,7 @@ const USER_PRESERVED_FIELDS = [
  * user-editable field listed in USER_PRESERVED_FIELDS.
  *
  * Auto slots (always overwritten by fresh): descriptionAuto, portDetected,
- *   startCommandDetected, frameworks, language, kind, children, parent
+ *   detectedUrls, startCommandDetected, frameworks, language, kind, children, parent
  *
  * Projects that disappear from disk are removed.
  * New projects are added with empty user slots.

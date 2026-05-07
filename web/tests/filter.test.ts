@@ -8,6 +8,7 @@ function p(over: Partial<Project>): Project {
     description: null, descriptionAuto: null, language: "node",
     frameworks: [], tags: [], startCommand: null, startCommandDetected: null,
     port: null, portDetected: null, archived: false,
+    detectedUrls: [],
     children: [], parent: null,
     lastEditedByUser: null, gitBranch: null, lastModified: null,
     ...over,

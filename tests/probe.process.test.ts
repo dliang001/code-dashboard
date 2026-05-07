@@ -13,6 +13,7 @@ function p(over: Partial<Project>): Project {
     language: null, frameworks: [], tags: [],
     startCommand: null, startCommandDetected: null,
     port: null, portDetected: null,
+    detectedUrls: [],
     archived: false,
     children: [], parent: null,
     lastEditedByUser: null, gitBranch: null, lastModified: null,

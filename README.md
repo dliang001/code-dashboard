@@ -99,7 +99,7 @@ or use the optional `Stop Code Dashboard` shortcut created with `-InstallStop`.
 ## Project Detection
 
 The scanner detects project type, framework, start command, port, README summary, git branch,
-and last activity.
+last activity, and local URLs documented in README files.
 
 Supported project signals include:
 
@@ -127,6 +127,12 @@ Port detection priority:
 Express and generic Python projects do not receive a guessed port unless a script or config
 declares one. This avoids showing clickable but wrong URLs.
 
+The scanner also looks through README files up to a few levels inside each project and extracts
+local URLs such as `http://localhost:3000/api/automation-lab/ui/`. This is meant for internal
+tool pages mounted inside a main app. These URLs appear in the project detail page as
+`扫描发现`; they do not create a separate project row unless that tool has its own runnable
+project directory.
+
 ## Running Projects
 
 The dashboard can start and stop projects from list rows or detail pages. Managed processes get:
@@ -135,6 +141,7 @@ The dashboard can start and stop projects from list rows or detail pages. Manage
 - Live stdout/stderr log streaming over WebSocket.
 - URLs extracted from logs such as `http://localhost:5173`.
 - Fallback URL discovery from the process listening port when logs do not print a URL.
+- README-discovered local tool URLs mounted under the project.
 - Port conflict handling: if the desired port is occupied, the dashboard can allocate the next free port and pass it through `PORT`.
 
 ### Editing Default Ports

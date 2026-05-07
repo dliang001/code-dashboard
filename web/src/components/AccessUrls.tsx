@@ -6,15 +6,15 @@ interface Props {
   runState: RunState;
   desiredPort?: number | null;
   allocatedPort?: number | null;
+  detectedUrls?: string[];
 }
 
 /**
  * Access URL panel. Source priority:
- *   1. URLs extracted from log output of a process WE manage (verified).
- *   2. http://localhost:<port> derived from the configured port — used for
- *      external runs and as a placeholder before logs print a URL.
- *   3. A grey "stopped" hint when we have a port but nothing is running.
- *   4. A gentle italic note when there's nothing actionable.
+ *   1. URLs extracted from log output of a process we manage.
+ *   2. http://localhost:<port> derived from the configured port.
+ *   3. Local URLs found in project docs, useful for sub-tools mounted under a main app.
+ *   4. A gentle note when there is nothing actionable.
  */
 export function AccessUrls({
   urls,
@@ -22,6 +22,7 @@ export function AccessUrls({
   runState,
   desiredPort,
   allocatedPort,
+  detectedUrls = [],
 }: Props) {
   const portMismatch =
     desiredPort != null && allocatedPort != null && desiredPort !== allocatedPort;
@@ -30,6 +31,9 @@ export function AccessUrls({
 
   const predicted = port != null ? `http://localhost:${port}` : null;
   const showPredicted = predicted != null && !urls.some((u) => u.startsWith(predicted));
+  const scannedUrls = detectedUrls.filter(
+    (u) => !urls.includes(u) && (predicted == null || u !== predicted),
+  );
 
   return (
     <div>
@@ -44,8 +48,7 @@ export function AccessUrls({
             marginBottom: 10,
           }}
         >
-          原端口 {desiredPort} 被占，已自动换到 <strong>{allocatedPort}</strong>{" "}
-          (PORT env)
+          原端口 {desiredPort} 被占用，已自动换到 <strong>{allocatedPort}</strong> (PORT env)
         </div>
       )}
 
@@ -69,7 +72,15 @@ export function AccessUrls({
         </div>
       )}
 
-      {urls.length === 0 && predicted == null && (
+      {scannedUrls.length > 0 && (
+        <div className="url-list" style={{ marginTop: urls.length > 0 || showPredicted ? 10 : 0 }}>
+          {scannedUrls.map((u) => (
+            <UrlRow key={u} url={u} note="扫描发现" />
+          ))}
+        </div>
+      )}
+
+      {urls.length === 0 && predicted == null && scannedUrls.length === 0 && (
         <div className="muted-italic">
           没有探测到端口。运行后如打印 <span className="mono">http://localhost:NNNN</span>{" "}
           会自动列出。

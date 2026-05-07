@@ -15,6 +15,7 @@ function makeProject(over: Partial<Project> = {}): Project {
     language: "node", frameworks: [], tags: [],
     startCommand: null, startCommandDetected: null,
     port: null, portDetected: null,
+    detectedUrls: [],
     archived: false, children: [], parent: null,
     lastEditedByUser: null, gitBranch: null, lastModified: null,
     ...over,
@@ -92,6 +93,7 @@ describe("mergeWithScan", () => {
       portDetected: 3000,
       startCommand: null,
       startCommandDetected: "npm run dev",
+      detectedUrls: ["http://localhost:3000/api/tool/ui/"],
       archived: false,
     });
     const merged = mergeWithScan([stored], [fresh]);
@@ -101,6 +103,7 @@ describe("mergeWithScan", () => {
     expect(merged[0]?.archived).toBe(true);
     expect(merged[0]?.portDetected).toBe(3000);          // auto field updated
     expect(merged[0]?.startCommandDetected).toBe("npm run dev");
+    expect(merged[0]?.detectedUrls).toEqual(["http://localhost:3000/api/tool/ui/"]);
   });
 
   it("adds newly discovered projects", () => {
