@@ -40,14 +40,19 @@ describe("detectPort", () => {
     expect(port).toBe(3000);
   });
 
-  it("falls back to the Flask default port", async () => {
+  it("does not infer Flask default from requirements alone", async () => {
     const port = await detectPort(path.join(FIX, "default-flask"));
-    expect(port).toBe(5000);
+    expect(port).toBeNull();
   });
 
   it("extracts a Flask config fallback port from a custom entry file", async () => {
     const port = await detectPort(path.join(FIX, "flask-custom-entry"));
     expect(port).toBe(5679);
+  });
+
+  it("prefers web-like docker services over database ports", async () => {
+    const port = await detectPort(path.join(FIX, "docker-with-db"));
+    expect(port).toBe(8080);
   });
 
   it("returns null when no port info present", async () => {

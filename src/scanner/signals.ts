@@ -65,12 +65,19 @@ async function findPythonEntry(dir: string, frameworks: string[]): Promise<strin
 }
 
 function pickNpmScript(scripts: Record<string, string>): string | null {
-  const priority = ["dev", "start", "serve"];
+  const priority = ["dev", "start", "serve", "preview"];
   for (const name of priority) {
     if (scripts[name]) return `npm run ${name}`;
   }
-  const first = Object.keys(scripts)[0];
-  return first ? `npm run ${first}` : null;
+  for (const [name, cmd] of Object.entries(scripts)) {
+    if (/\b(vite|next|nuxt|astro|remix|svelte-kit|webpack-dev-server)\b/.test(cmd)) {
+      return `npm run ${name}`;
+    }
+    if (/\b(node|tsx|ts-node)\b.*\b(server|app|index)\.[cm]?[jt]s\b/.test(cmd)) {
+      return `npm run ${name}`;
+    }
+  }
+  return null;
 }
 
 export async function detectSignals(dir: string): Promise<Signals> {
@@ -115,7 +122,7 @@ export async function detectSignals(dir: string): Promise<Signals> {
       kind: "python",
       language: "python",
       frameworks: [],
-      startCommandDetected: cmd ?? "poetry run python -m main",
+      startCommandDetected: cmd,
     };
   }
 
@@ -124,7 +131,7 @@ export async function detectSignals(dir: string): Promise<Signals> {
     const reqs = (await fs.readFile(path.join(dir, "requirements.txt"), "utf-8")).toLowerCase();
     const frameworks = PY_FRAMEWORKS.filter((f) => reqs.includes(f));
     const entryFile = await findPythonEntry(dir, frameworks);
-    let startCmd: string;
+    let startCmd: string | null;
     if (await exists(path.join(dir, "manage.py"))) {
       startCmd = "python manage.py runserver";
     } else if (frameworks.includes("fastapi") && entryFile != null) {
@@ -133,7 +140,7 @@ export async function detectSignals(dir: string): Promise<Signals> {
     } else if (entryFile != null) {
       startCmd = `python ${entryFile}`;
     } else {
-      startCmd = "python -m main";
+      startCmd = null;
     }
     return {
       kind: "python",

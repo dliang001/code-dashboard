@@ -101,12 +101,12 @@ describe("detectSignals", () => {
       expect(sig.startCommandDetected).toBe("npm run serve");
     });
 
-    it("falls back to first script when none of dev/start/serve exist", async () => {
-      const dir = await makeTempDir("fallback");
-      await writePackageJson(dir, { build: "tsc", lint: "eslint ." });
-      const sig = await detectSignals(dir);
-      expect(sig.startCommandDetected).toBe("npm run build");
-    });
+  it("does not treat build/lint scripts as start commands", async () => {
+    const dir = await makeTempDir("fallback");
+    await writePackageJson(dir, { build: "tsc", lint: "eslint ." });
+    const sig = await detectSignals(dir);
+    expect(sig.startCommandDetected).toBeNull();
+  });
 
     it("prefers `dev` when all three are present (dev placed last)", async () => {
       const dir = await makeTempDir("all");
@@ -118,5 +118,12 @@ describe("detectSignals", () => {
       const sig = await detectSignals(dir);
       expect(sig.startCommandDetected).toBe("npm run dev");
     });
+  });
+
+  it("does not invent a Python entry command when no entry file exists", async () => {
+    const sig = await detectSignals(path.join(FIX, "default-flask"));
+    expect(sig.kind).toBe("python");
+    expect(sig.frameworks).toContain("flask");
+    expect(sig.startCommandDetected).toBeNull();
   });
 });

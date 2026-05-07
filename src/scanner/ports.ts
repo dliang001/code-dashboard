@@ -31,7 +31,10 @@ function depNames(pkg: {
   ]);
 }
 
-function fromNodeDeps(deps: Set<string>): number | null {
+function fromNodeDeps(deps: Set<string>, scripts?: Record<string, string>): number | null {
+  if (!scripts || !Object.values(scripts).some((cmd) => /\b(dev|vite|next|nuxt|astro|svelte-kit)\b/.test(cmd))) {
+    return null;
+  }
   if (deps.has("vite") || deps.has("@vitejs/plugin-react") || deps.has("@vitejs/plugin-vue")) return 5173;
   if (deps.has("next")) return 3000;
   if (deps.has("nuxt")) return 3000;
@@ -63,7 +66,7 @@ async function fromNestedPackageScripts(dir: string): Promise<number | null> {
       if (!pkg.scripts) continue;
       const port = fromScripts(pkg.scripts);
       if (port !== null) return port;
-      const fromDeps = fromNodeDeps(depNames(pkg));
+      const fromDeps = fromNodeDeps(depNames(pkg), pkg.scripts);
       if (fromDeps !== null) return fromDeps;
     } catch {
       // ignore malformed child package files
@@ -99,14 +102,15 @@ function fromJsonConfig(content: string): number | null {
   return null;
 }
 
-function fromPythonText(content: string): number | null {
+function fromPythonText(content: string, allowFrameworkDefaults: boolean): number | null {
   const lower = content.toLowerCase();
   const explicit = lower.match(/(?:port|flask_run_port)\s*=\s*["']?(\d{2,5})/);
   if (explicit) return parseInt(explicit[1]!, 10);
   const configFallback = lower.match(/\.get\(\s*["'](?:assistant_)?port["']\s*,\s*(\d{2,5})\s*\)/);
   if (configFallback) return parseInt(configFallback[1]!, 10);
+  if (!allowFrameworkDefaults) return null;
   if (/\buvicorn\b|\bfastapi\b/.test(lower)) return 8000;
-  if (/\bflask\b/.test(lower)) return 5000;
+  if (/\bflask\b/.test(lower) && /\bapp\.run\s*\(/.test(lower)) return 5000;
   return null;
 }
 
@@ -114,14 +118,24 @@ function fromDockerCompose(content: string): number | null {
   try {
     const parsed = parseYaml(content) as { services?: Record<string, { ports?: (string | number)[] }> };
     if (!parsed.services) return null;
-    for (const svc of Object.values(parsed.services)) {
+    const candidates: Array<{ port: number; score: number }> = [];
+    for (const [name, svc] of Object.entries(parsed.services)) {
       if (!svc.ports) continue;
       for (const entry of svc.ports) {
         const s = String(entry);
         const m = s.match(/^(\d{2,5}):/);
-        if (m) return parseInt(m[1]!, 10);
+        if (!m) continue;
+        const port = parseInt(m[1]!, 10);
+        const lowerName = name.toLowerCase();
+        let score = 0;
+        if (/\b(web|frontend|front|app|api|server|dashboard)\b/.test(lowerName)) score += 100;
+        if ([80, 443, 3000, 3001, 5000, 5173, 8000, 8080, 9000].includes(port)) score += 20;
+        if ([5432, 3306, 6379, 27017, 9200, 9300].includes(port)) score -= 50;
+        candidates.push({ port, score });
       }
     }
+    candidates.sort((a, b) => b.score - a.score);
+    return candidates[0]?.port ?? null;
   } catch { /* ignore */ }
   return null;
 }
@@ -140,7 +154,7 @@ export async function detectPort(dir: string): Promise<number | null> {
         const fromS = fromScripts(pkg.scripts);
         if (fromS !== null) return fromS;
       }
-      const fromDeps = fromNodeDeps(depNames(pkg));
+      const fromDeps = fromNodeDeps(depNames(pkg), pkg.scripts);
       if (fromDeps !== null) return fromDeps;
     } catch { /* ignore */ }
   }
@@ -178,7 +192,8 @@ export async function detectPort(dir: string): Promise<number | null> {
   for (const fn of ["pyproject.toml", "app.py", "main.py", "assistant.py", "server.py", "web.py", "requirements.txt"]) {
     const c = await readSafe(path.join(dir, fn));
     if (c) {
-      const v = fromPythonText(c);
+      const allowDefaults = fn !== "requirements.txt" && fn !== "pyproject.toml";
+      const v = fromPythonText(c, allowDefaults);
       if (v !== null) return v;
     }
   }

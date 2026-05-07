@@ -127,6 +127,15 @@ Port detection priority:
 Express and generic Python projects do not receive a guessed port unless a script or config
 declares one. This avoids showing clickable but wrong URLs.
 
+Python detection is intentionally conservative. The dashboard only suggests a start command
+when it can find a real entry file such as `app.py`, `main.py`, or a Flask file that creates
+`Flask(...)` and calls `app.run(...)`. It will not invent `python -m main` when no `main.py`
+exists. For Flask ports, code/config values like `PORT`, `assistant_port`, or `app.run(port=...)`
+win over framework defaults; `requirements.txt` alone is not enough to claim port `5000`.
+
+Docker Compose port detection favors services named like `web`, `frontend`, `app`, `api`, or
+`server`, and deprioritizes common database/cache ports such as `5432`, `3306`, and `6379`.
+
 The scanner also looks through README files up to a few levels inside each project and extracts
 local URLs such as `http://localhost:3000/api/automation-lab/ui/`. This is meant for internal
 tool pages mounted inside a main app. These URLs appear in the project detail page as
