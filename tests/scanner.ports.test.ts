@@ -45,6 +45,11 @@ describe("detectPort", () => {
     expect(port).toBe(5000);
   });
 
+  it("extracts a Flask config fallback port from a custom entry file", async () => {
+    const port = await detectPort(path.join(FIX, "flask-custom-entry"));
+    expect(port).toBe(5679);
+  });
+
   it("returns null when no port info present", async () => {
     const port = await detectPort(path.join(FIX, "rust-app"));
     expect(port).toBeNull();

@@ -55,6 +55,13 @@ describe("detectSignals", () => {
     expect(sig.frameworks).toContain("fastapi");
   });
 
+  it("finds a Flask entry file when app.py/main.py are absent", async () => {
+    const sig = await detectSignals(path.join(FIX, "flask-custom-entry"));
+    expect(sig.kind).toBe("python");
+    expect(sig.frameworks).toContain("flask");
+    expect(sig.startCommandDetected).toBe("python assistant.py");
+  });
+
   it("identifies a Docker Compose project", async () => {
     const sig = await detectSignals(path.join(FIX, "docker-app"));
     expect(sig.kind).toBe("docker");

@@ -34,6 +34,36 @@ async function exists(p: string): Promise<boolean> {
   }
 }
 
+async function findPythonEntry(dir: string, frameworks: string[]): Promise<string | null> {
+  for (const file of ["app.py", "main.py"]) {
+    if (await exists(path.join(dir, file))) return file;
+  }
+
+  if (!frameworks.includes("flask")) return null;
+
+  let entries: import("node:fs").Dirent[];
+  try {
+    entries = await fs.readdir(dir, { withFileTypes: true });
+  } catch {
+    return null;
+  }
+
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.endsWith(".py")) continue;
+    let content: string;
+    try {
+      content = await fs.readFile(path.join(dir, entry.name), "utf-8");
+    } catch {
+      continue;
+    }
+    if (content.includes("Flask(") && /\bapp\.run\s*\(/.test(content)) {
+      return entry.name;
+    }
+  }
+
+  return null;
+}
+
 function pickNpmScript(scripts: Record<string, string>): string | null {
   const priority = ["dev", "start", "serve"];
   for (const name of priority) {
@@ -93,16 +123,15 @@ export async function detectSignals(dir: string): Promise<Signals> {
   if (await exists(path.join(dir, "requirements.txt"))) {
     const reqs = (await fs.readFile(path.join(dir, "requirements.txt"), "utf-8")).toLowerCase();
     const frameworks = PY_FRAMEWORKS.filter((f) => reqs.includes(f));
+    const entryFile = await findPythonEntry(dir, frameworks);
     let startCmd: string;
     if (await exists(path.join(dir, "manage.py"))) {
       startCmd = "python manage.py runserver";
-    } else if (frameworks.includes("fastapi") && (await exists(path.join(dir, "app.py")) || await exists(path.join(dir, "main.py")))) {
-      const entry = (await exists(path.join(dir, "app.py"))) ? "app:app" : "main:app";
+    } else if (frameworks.includes("fastapi") && entryFile != null) {
+      const entry = `${entryFile.replace(/\.py$/, "")}:app`;
       startCmd = `uvicorn ${entry} --reload`;
-    } else if (await exists(path.join(dir, "main.py"))) {
-      startCmd = "python main.py";
-    } else if (await exists(path.join(dir, "app.py"))) {
-      startCmd = "python app.py";
+    } else if (entryFile != null) {
+      startCmd = `python ${entryFile}`;
     } else {
       startCmd = "python -m main";
     }

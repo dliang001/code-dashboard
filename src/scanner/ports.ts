@@ -85,10 +85,26 @@ function fromEnv(content: string): number | null {
   return null;
 }
 
+function fromJsonConfig(content: string): number | null {
+  try {
+    const parsed = JSON.parse(content) as Record<string, unknown>;
+    for (const key of ["port", "assistant_port", "flask_run_port"]) {
+      const value = parsed[key];
+      if (typeof value === "number" && Number.isInteger(value)) return value;
+      if (typeof value === "string" && /^\d{2,5}$/.test(value)) return parseInt(value, 10);
+    }
+  } catch {
+    // ignore malformed config files
+  }
+  return null;
+}
+
 function fromPythonText(content: string): number | null {
   const lower = content.toLowerCase();
   const explicit = lower.match(/(?:port|flask_run_port)\s*=\s*["']?(\d{2,5})/);
   if (explicit) return parseInt(explicit[1]!, 10);
+  const configFallback = lower.match(/\.get\(\s*["'](?:assistant_)?port["']\s*,\s*(\d{2,5})\s*\)/);
+  if (configFallback) return parseInt(configFallback[1]!, 10);
   if (/\buvicorn\b|\bfastapi\b/.test(lower)) return 8000;
   if (/\bflask\b/.test(lower)) return 5000;
   return null;
@@ -142,7 +158,7 @@ export async function detectPort(dir: string): Promise<number | null> {
     }
   }
 
-  // 4. .env files
+  // 4. .env / JSON config files
   for (const fn of [".env.local", ".env"]) {
     const c = await readSafe(path.join(dir, fn));
     if (c) {
@@ -150,9 +166,16 @@ export async function detectPort(dir: string): Promise<number | null> {
       if (v !== null) return v;
     }
   }
+  for (const fn of ["config.json"]) {
+    const c = await readSafe(path.join(dir, fn));
+    if (c) {
+      const v = fromJsonConfig(c);
+      if (v !== null) return v;
+    }
+  }
 
-  // 5. Python framework defaults / explicit app.run(port=...)
-  for (const fn of ["requirements.txt", "pyproject.toml", "app.py", "main.py"]) {
+  // 5. Python explicit app ports before broad framework defaults.
+  for (const fn of ["pyproject.toml", "app.py", "main.py", "assistant.py", "server.py", "web.py", "requirements.txt"]) {
     const c = await readSafe(path.join(dir, fn));
     if (c) {
       const v = fromPythonText(c);
