@@ -1,0 +1,10 @@
+{
+  "scripts": {
+    "build:h5": "uni build -p h5",
+    "dev:h5": "uni -p h5"
+  },
+  "dependencies": {
+    "@dcloudio/uni-app": "3.0.0",
+    "vite": "^5.2.0"
+  }
+}

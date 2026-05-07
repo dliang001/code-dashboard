@@ -68,6 +68,12 @@ describe("detectSignals", () => {
     expect(sig.startCommandDetected).toBe("docker-compose up");
   });
 
+  it("prefers package scripts when docker-compose only defines backing services", async () => {
+    const sig = await detectSignals(path.join(FIX, "node-with-compose"));
+    expect(sig.kind).toBe("node");
+    expect(sig.startCommandDetected).toBe("npm run dev");
+  });
+
   it("identifies a Rust project", async () => {
     const sig = await detectSignals(path.join(FIX, "rust-app"));
     expect(sig.kind).toBe("rust");
@@ -125,5 +131,17 @@ describe("detectSignals", () => {
     expect(sig.kind).toBe("python");
     expect(sig.frameworks).toContain("flask");
     expect(sig.startCommandDetected).toBeNull();
+  });
+
+  it("detects plain Python main.py projects without requirements.txt", async () => {
+    const sig = await detectSignals(path.join(FIX, "plain-python-main"));
+    expect(sig.kind).toBe("python");
+    expect(sig.startCommandDetected).toBe("python main.py");
+  });
+
+  it("picks uni h5 development scripts", async () => {
+    const sig = await detectSignals(path.join(FIX, "uni-app"));
+    expect(sig.kind).toBe("node");
+    expect(sig.startCommandDetected).toBe("npm run dev:h5");
   });
 });

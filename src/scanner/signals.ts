@@ -39,14 +39,14 @@ async function findPythonEntry(dir: string, frameworks: string[]): Promise<strin
     if (await exists(path.join(dir, file))) return file;
   }
 
-  if (!frameworks.includes("flask")) return null;
-
   let entries: import("node:fs").Dirent[];
   try {
     entries = await fs.readdir(dir, { withFileTypes: true });
   } catch {
     return null;
   }
+
+  if (!frameworks.includes("flask")) return null;
 
   for (const entry of entries) {
     if (!entry.isFile() || !entry.name.endsWith(".py")) continue;
@@ -65,12 +65,12 @@ async function findPythonEntry(dir: string, frameworks: string[]): Promise<strin
 }
 
 function pickNpmScript(scripts: Record<string, string>): string | null {
-  const priority = ["dev", "start", "serve", "preview"];
+  const priority = ["dev", "dev:h5", "start", "serve", "preview"];
   for (const name of priority) {
     if (scripts[name]) return `npm run ${name}`;
   }
   for (const [name, cmd] of Object.entries(scripts)) {
-    if (/\b(vite|next|nuxt|astro|remix|svelte-kit|webpack-dev-server)\b/.test(cmd)) {
+    if (/\b(vite|next|nuxt|astro|remix|svelte-kit|webpack-dev-server|uni)\b/.test(cmd)) {
       return `npm run ${name}`;
     }
     if (/\b(node|tsx|ts-node)\b.*\b(server|app|index)\.[cm]?[jt]s\b/.test(cmd)) {
@@ -81,17 +81,9 @@ function pickNpmScript(scripts: Record<string, string>): string | null {
 }
 
 export async function detectSignals(dir: string): Promise<Signals> {
-  // Priority 1: docker-compose
-  if (await exists(path.join(dir, "docker-compose.yml")) || await exists(path.join(dir, "docker-compose.yaml"))) {
-    return {
-      kind: "docker",
-      language: "docker",
-      frameworks: [],
-      startCommandDetected: "docker-compose up",
-    };
-  }
-
-  // Priority 2: package.json
+  // Priority 1: package.json. Many app repos keep docker-compose only for
+  // backing services such as Postgres/Redis, so the app package is the better
+  // runnable target when both are present.
   const pkg = await tryReadJSON<{ scripts?: Record<string, string>; dependencies?: Record<string, string>; devDependencies?: Record<string, string> }>(path.join(dir, "package.json"));
   if (pkg) {
     const allDeps = { ...pkg.dependencies, ...pkg.devDependencies };
@@ -102,6 +94,16 @@ export async function detectSignals(dir: string): Promise<Signals> {
       language: "node",
       frameworks,
       startCommandDetected: startCmd,
+    };
+  }
+
+  // Priority 2: docker-compose-only projects
+  if (await exists(path.join(dir, "docker-compose.yml")) || await exists(path.join(dir, "docker-compose.yaml"))) {
+    return {
+      kind: "docker",
+      language: "docker",
+      frameworks: [],
+      startCommandDetected: "docker-compose up",
     };
   }
 
@@ -150,12 +152,23 @@ export async function detectSignals(dir: string): Promise<Signals> {
     };
   }
 
-  // Priority 5: Cargo.toml
+  // Priority 5: plain Python scripts without a requirements file.
+  const pyEntry = await findPythonEntry(dir, []);
+  if (pyEntry != null) {
+    return {
+      kind: "python",
+      language: "python",
+      frameworks: [],
+      startCommandDetected: `python ${pyEntry}`,
+    };
+  }
+
+  // Priority 6: Cargo.toml
   if (await exists(path.join(dir, "Cargo.toml"))) {
     return { kind: "rust", language: "rust", frameworks: [], startCommandDetected: "cargo run" };
   }
 
-  // Priority 6: go.mod
+  // Priority 7: go.mod
   if (await exists(path.join(dir, "go.mod"))) {
     return { kind: "go", language: "go", frameworks: [], startCommandDetected: "go run ." };
   }

@@ -35,9 +35,9 @@ describe("detectPort", () => {
     expect(port).toBe(3100);
   });
 
-  it("falls back to the Next.js default port", async () => {
+  it("does not infer the Next.js default port from dependencies alone", async () => {
     const port = await detectPort(path.join(FIX, "default-next"));
-    expect(port).toBe(3000);
+    expect(port).toBeNull();
   });
 
   it("does not infer Flask default from requirements alone", async () => {
@@ -53,6 +53,11 @@ describe("detectPort", () => {
   it("prefers web-like docker services over database ports", async () => {
     const port = await detectPort(path.join(FIX, "docker-with-db"));
     expect(port).toBe(8080);
+  });
+
+  it("extracts port from APP_URL in .env", async () => {
+    const port = await detectPort(path.join(FIX, "port-from-app-url"));
+    expect(port).toBe(3301);
   });
 
   it("returns null when no port info present", async () => {

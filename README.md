@@ -114,7 +114,7 @@ Port detection priority:
 1. Explicit script flags such as `--port 3200` or `-p 3200`.
 2. Nested workspace web package scripts, for example `apps/web/package.json`.
 3. `vite.config.*` `server.port`.
-4. `.env.local` / `.env` `PORT`, `VITE_PORT`, or `NEXT_PUBLIC_PORT`.
+4. `.env.local` / `.env` `PORT`, `VITE_PORT`, `NEXT_PUBLIC_PORT`, or local app URLs such as `APP_URL=http://localhost:3301`.
 5. Python app text and common framework defaults.
 6. Docker Compose host port mappings.
 7. Safe framework defaults:
@@ -127,14 +127,22 @@ Port detection priority:
 Express and generic Python projects do not receive a guessed port unless a script or config
 declares one. This avoids showing clickable but wrong URLs.
 
-Python detection is intentionally conservative. The dashboard only suggests a start command
-when it can find a real entry file such as `app.py`, `main.py`, or a Flask file that creates
-`Flask(...)` and calls `app.run(...)`. It will not invent `python -m main` when no `main.py`
-exists. For Flask ports, code/config values like `PORT`, `assistant_port`, or `app.run(port=...)`
-win over framework defaults; `requirements.txt` alone is not enough to claim port `5000`.
+Node framework defaults are not treated as real ports unless a project declares them in scripts,
+config, or environment. For example, Vite is not blindly reported as `5173` when
+`vite.config.*` says `5178`, and Next is not blindly reported as `3000` when `.env` says
+`APP_URL=http://localhost:3301`.
+
+Python detection is intentionally conservative but still supports script-style projects. The
+dashboard suggests a start command when it can find a real entry file such as `app.py`,
+`main.py`, or a Flask file that creates `Flask(...)` and calls `app.run(...)`. It will not invent
+`python -m main` when no `main.py` exists. For Flask ports, code/config values like `PORT`,
+`assistant_port`, or `app.run(port=...)` win over framework defaults; `requirements.txt` alone
+is not enough to claim port `5000`.
 
 Docker Compose port detection favors services named like `web`, `frontend`, `app`, `api`, or
 `server`, and deprioritizes common database/cache ports such as `5432`, `3306`, and `6379`.
+When a repository has both `package.json` and `docker-compose.yml`, the package scripts are
+treated as the app entrypoint because compose often only starts backing services.
 
 The scanner also looks through README files up to a few levels inside each project and extracts
 local URLs such as `http://localhost:3000/api/automation-lab/ui/`. This is meant for internal

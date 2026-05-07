@@ -31,18 +31,6 @@ function depNames(pkg: {
   ]);
 }
 
-function fromNodeDeps(deps: Set<string>, scripts?: Record<string, string>): number | null {
-  if (!scripts || !Object.values(scripts).some((cmd) => /\b(dev|vite|next|nuxt|astro|svelte-kit)\b/.test(cmd))) {
-    return null;
-  }
-  if (deps.has("vite") || deps.has("@vitejs/plugin-react") || deps.has("@vitejs/plugin-vue")) return 5173;
-  if (deps.has("next")) return 3000;
-  if (deps.has("nuxt")) return 3000;
-  if (deps.has("astro")) return 4321;
-  if (deps.has("@sveltejs/kit")) return 5173;
-  return null;
-}
-
 async function fromNestedPackageScripts(dir: string): Promise<number | null> {
   const candidates = [
     ["apps", "web"],
@@ -66,8 +54,6 @@ async function fromNestedPackageScripts(dir: string): Promise<number | null> {
       if (!pkg.scripts) continue;
       const port = fromScripts(pkg.scripts);
       if (port !== null) return port;
-      const fromDeps = fromNodeDeps(depNames(pkg), pkg.scripts);
-      if (fromDeps !== null) return fromDeps;
     } catch {
       // ignore malformed child package files
     }
@@ -84,6 +70,8 @@ function fromEnv(content: string): number | null {
   for (const line of content.split(/\r?\n/)) {
     const m = line.match(/^\s*(?:VITE_|NEXT_PUBLIC_)?PORT\s*=\s*(\d{2,5})\s*$/);
     if (m) return parseInt(m[1]!, 10);
+    const url = line.match(/^\s*(?:APP_URL|PUBLIC_URL|BASE_URL|NEXT_PUBLIC_APP_URL)\s*=\s*["']?https?:\/\/(?:localhost|127\.0\.0\.1)(?::(\d{2,5}))?/);
+    if (url?.[1]) return parseInt(url[1], 10);
   }
   return null;
 }
@@ -154,16 +142,10 @@ export async function detectPort(dir: string): Promise<number | null> {
         const fromS = fromScripts(pkg.scripts);
         if (fromS !== null) return fromS;
       }
-      const fromDeps = fromNodeDeps(depNames(pkg), pkg.scripts);
-      if (fromDeps !== null) return fromDeps;
     } catch { /* ignore */ }
   }
 
-  // 2. Common monorepo app packages, e.g. root script delegates to apps/web.
-  const fromNested = await fromNestedPackageScripts(dir);
-  if (fromNested !== null) return fromNested;
-
-  // 3. vite.config.{ts,js,mjs}
+  // 2. vite.config.{ts,js,mjs} with explicit server.port.
   for (const fn of ["vite.config.ts", "vite.config.js", "vite.config.mjs"]) {
     const c = await readSafe(path.join(dir, fn));
     if (c) {
@@ -172,7 +154,7 @@ export async function detectPort(dir: string): Promise<number | null> {
     }
   }
 
-  // 4. .env / JSON config files
+  // 3. .env / JSON config files
   for (const fn of [".env.local", ".env"]) {
     const c = await readSafe(path.join(dir, fn));
     if (c) {
@@ -187,6 +169,10 @@ export async function detectPort(dir: string): Promise<number | null> {
       if (v !== null) return v;
     }
   }
+
+  // 4. Common monorepo app packages, e.g. root script delegates to apps/web.
+  const fromNested = await fromNestedPackageScripts(dir);
+  if (fromNested !== null) return fromNested;
 
   // 5. Python explicit app ports before broad framework defaults.
   for (const fn of ["pyproject.toml", "app.py", "main.py", "assistant.py", "server.py", "web.py", "requirements.txt"]) {
