@@ -139,6 +139,37 @@ describe("detectSignals", () => {
     expect(sig.startCommandDetected).toBe("python main.py");
   });
 
+  it("falls back to README start-all scripts for Python projects without an entry file", async () => {
+    const dir = await makeTempDir("readme-start-all");
+    await fs.mkdir(path.join(dir, "scripts"));
+    await fs.writeFile(path.join(dir, "requirements.txt"), "imageio-ffmpeg\n", "utf-8");
+    await fs.writeFile(path.join(dir, "scripts", "start-all.ps1"), "", "utf-8");
+    await fs.writeFile(
+      path.join(dir, "README.md"),
+      [
+        "# Industrial 3D Pipeline",
+        "",
+        "```powershell",
+        ".\\scripts\\setup.ps1",
+        ".\\scripts\\verify-env.ps1",
+        "```",
+        "",
+        "Run the management UI:",
+        "",
+        "```powershell",
+        ".\\scripts\\start-all.ps1",
+        "```",
+      ].join("\n"),
+      "utf-8",
+    );
+
+    const sig = await detectSignals(dir);
+    expect(sig.kind).toBe("python");
+    expect(sig.startCommandDetected).toBe(
+      "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\start-all.ps1",
+    );
+  });
+
   it("picks uni h5 development scripts", async () => {
     const sig = await detectSignals(path.join(FIX, "uni-app"));
     expect(sig.kind).toBe("node");

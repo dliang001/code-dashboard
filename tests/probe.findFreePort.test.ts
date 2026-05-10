@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import net from "node:net";
-import { findFreePort } from "../src/probe/port";
+import { findFreePort, parseExcludedPortRanges } from "../src/probe/port";
 
 function listen(port: number): Promise<net.Server> {
   return new Promise((res, rej) => {
@@ -59,5 +59,26 @@ describe("findFreePort", () => {
       b?.close();
       c?.close();
     }
+  });
+});
+
+describe("parseExcludedPortRanges", () => {
+  it("parses Windows netsh excluded TCP port ranges", () => {
+    const output = [
+      "",
+      "Protocol tcp Port Exclusion Ranges",
+      "",
+      "Start Port    End Port",
+      "----------    --------",
+      "      5141        5240",
+      "     50000       50059     *",
+      "",
+      "* - Administered port exclusions.",
+    ].join("\n");
+
+    expect(parseExcludedPortRanges(output)).toEqual([
+      [5141, 5240],
+      [50000, 50059],
+    ]);
   });
 });

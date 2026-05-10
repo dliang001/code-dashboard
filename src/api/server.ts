@@ -10,7 +10,7 @@ import { findConflicts } from "../scanner/conflicts.js";
 import type { PersistedStore, Project, RunState, ScanResult } from "../types.js";
 import { DEFAULT_SETTINGS } from "../types.js";
 import * as openHelpers from "./open.js";
-import { ProbeCache, probePort, findFreePort } from "../probe/port.js";
+import { ProbeCache, probePort, findFreePort, isPortExcluded } from "../probe/port.js";
 import { listListeningPortsByPid } from "../probe/process.js";
 import { ProcessManager, type LogLine, type RunningInfo } from "../runner/process.js";
 
@@ -366,7 +366,7 @@ function registerRunnerRoutes(
     // hardcoded a port in code) — in that case the dev server will fail to
     // bind and the error shows up in the log stream.
     if (desiredPort != null && !runner.isManaged(proj.id)) {
-      const inUse = await probePort(desiredPort);
+      const inUse = (await isPortExcluded(desiredPort)) || (await probePort(desiredPort));
       if (inUse) {
         const free = await findFreePort(desiredPort + 1);
         if (free == null) return { id: proj.id, ok: false, reason: "no-free-port", desiredPort };

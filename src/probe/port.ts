@@ -1,19 +1,25 @@
 import net from "node:net";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import type { Project, RunState } from "../types.js";
 import { listRunningProcesses, matchProjectsToProcesses } from "./process.js";
 import type { ProcessManager } from "../runner/process.js";
 
+const execFileP = promisify(execFile);
+let excludedRangesCache: Promise<Array<[number, number]>> | null = null;
+
 /**
  * Walk upward from `start` (capped at `start + maxAttempts - 1`) and return
- * the first port nothing is listening on. Returns null if every candidate
- * is occupied. Used to suggest an alt port when the configured one is taken.
+ * the first port that is bindable. Returns null if every candidate is
+ * occupied or reserved by the OS. Used to suggest an alt port when the
+ * configured one is taken.
  */
-export async function findFreePort(start: number, maxAttempts = 20): Promise<number | null> {
+export async function findFreePort(start: number, maxAttempts = 200): Promise<number | null> {
   for (let i = 0; i < maxAttempts; i++) {
     const port = start + i;
     if (port > 65535) return null;
-    const open = await probePort(port);
-    if (!open) return port;
+    const available = await isPortAvailable(port);
+    if (available) return port;
   }
   return null;
 }
@@ -38,6 +44,48 @@ export function probePort(port: number, timeoutMs = 500): Promise<boolean> {
     socket.once("error", () => finish(false));
     socket.connect(port, "127.0.0.1");
   });
+}
+
+export function parseExcludedPortRanges(output: string): Array<[number, number]> {
+  const ranges: Array<[number, number]> = [];
+  for (const line of output.split(/\r?\n/)) {
+    const m = line.trim().match(/^(\d{2,5})\s+(\d{2,5})(?:\s+\*)?$/);
+    if (!m) continue;
+    const start = parseInt(m[1]!, 10);
+    const end = parseInt(m[2]!, 10);
+    if (start <= end) ranges.push([start, end]);
+  }
+  return ranges;
+}
+
+async function loadWindowsExcludedPortRanges(): Promise<Array<[number, number]>> {
+  if (process.platform !== "win32") return [];
+  const outputs = await Promise.all(
+    ["ipv4", "ipv6"].map(async (family) => {
+      try {
+        const { stdout } = await execFileP(
+          "netsh.exe",
+          ["interface", family, "show", "excludedportrange", "protocol=tcp"],
+          { windowsHide: true, timeout: 2000 },
+        );
+        return stdout;
+      } catch {
+        return "";
+      }
+    }),
+  );
+  return outputs.flatMap(parseExcludedPortRanges);
+}
+
+export async function isPortExcluded(port: number): Promise<boolean> {
+  excludedRangesCache ??= loadWindowsExcludedPortRanges();
+  const ranges = await excludedRangesCache;
+  return ranges.some(([start, end]) => port >= start && port <= end);
+}
+
+export async function isPortAvailable(port: number): Promise<boolean> {
+  if (await isPortExcluded(port)) return false;
+  return !(await probePort(port));
 }
 
 /**

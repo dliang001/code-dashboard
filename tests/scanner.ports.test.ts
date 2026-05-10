@@ -20,6 +20,11 @@ describe("detectPort", () => {
     expect(port).toBe(7070);
   });
 
+  it("extracts fallback port from a Vite config port variable", async () => {
+    const port = await detectPort(path.join(FIX, "port-from-vite-env"));
+    expect(port).toBe(5780);
+  });
+
   it("extracts port from .env PORT=", async () => {
     const port = await detectPort(path.join(FIX, "port-from-env"));
     expect(port).toBe(6060);

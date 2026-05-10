@@ -63,7 +63,13 @@ async function fromNestedPackageScripts(dir: string): Promise<number | null> {
 
 function fromViteConfig(content: string): number | null {
   const m = content.match(/port\s*:\s*(\d{2,5})/);
-  return m ? parseInt(m[1]!, 10) : null;
+  if (m) return parseInt(m[1]!, 10);
+
+  const ref = content.match(/port\s*:\s*([A-Za-z_$][\w$]*)/);
+  if (!ref) return null;
+  const name = ref[1]!.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const fallback = content.match(new RegExp(`(?:const|let|var)\\s+${name}\\s*=\\s*[^;]*\\|\\|\\s*(\\d{2,5})`));
+  return fallback ? parseInt(fallback[1]!, 10) : null;
 }
 
 function fromEnv(content: string): number | null {
