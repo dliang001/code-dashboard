@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { applyPortToCommand } from "../src/runner/schedule";
+import { applyPortToCommand, chooseLaunchPort } from "../src/runner/schedule";
 
 describe("applyPortToCommand", () => {
   it("passes --port through an npm script for Vite (PORT env is ignored by Vite)", () => {
@@ -43,5 +43,30 @@ describe("applyPortToCommand", () => {
     const r = applyPortToCommand("npm run start", ["express"], 4001);
     expect(r.command).toBe("npm run start");
     expect(r.env).toEqual({ PORT: "4001" });
+  });
+});
+
+describe("chooseLaunchPort", () => {
+  const free = (...taken: number[]) => async (p: number) => !taken.includes(p);
+
+  it("uses the desired port when free and nothing remembered", async () => {
+    expect(await chooseLaunchPort(3000, undefined, free())).toBe(3000);
+  });
+
+  it("prefers a remembered allocation for stability, even if the desired port is free", async () => {
+    // bumped to 5174 last time → keep 5174 so the bookmark stays valid.
+    expect(await chooseLaunchPort(3000, 5174, free())).toBe(5174);
+  });
+
+  it("re-bumps when the remembered port is now taken", async () => {
+    expect(await chooseLaunchPort(3000, 5174, free(5174))).toBe(5175);
+  });
+
+  it("walks up from the desired port when it is taken and nothing remembered", async () => {
+    expect(await chooseLaunchPort(3000, undefined, free(3000, 3001))).toBe(3002);
+  });
+
+  it("returns null when no port in range is free", async () => {
+    expect(await chooseLaunchPort(3000, undefined, async () => false, 5)).toBeNull();
   });
 });

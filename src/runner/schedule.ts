@@ -52,3 +52,27 @@ export function applyPortToCommand(
   // 3. Everything else: PORT env (Next.js, CRA, Express, Nest, uvicorn-via-env).
   return { command, env: { PORT: String(port) } };
 }
+
+/**
+ * Choose the port to launch a project on.
+ *
+ * Prefers a previously-remembered allocation (so a project bumped to :5174
+ * stays on :5174 across restarts — stable URLs), falling back to the desired
+ * port, then walking upward to the first free port. `isFree` must fold in
+ * everything that makes a port unusable (OS-occupied, OS-reserved, AND ports
+ * already claimed by other projects this session). Returns null if nothing in
+ * range is free.
+ */
+export async function chooseLaunchPort(
+  desiredPort: number,
+  remembered: number | undefined,
+  isFree: (port: number) => Promise<boolean>,
+  maxScan = 500,
+): Promise<number | null> {
+  const preferred = remembered ?? desiredPort;
+  if (await isFree(preferred)) return preferred;
+  for (let port = preferred + 1, i = 0; port <= 65535 && i < maxScan; port++, i++) {
+    if (await isFree(port)) return port;
+  }
+  return null;
+}
