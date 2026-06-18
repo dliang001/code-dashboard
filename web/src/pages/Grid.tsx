@@ -5,7 +5,7 @@ import { ProjectRow } from "../components/ProjectCard";
 import { EmptyState } from "../components/EmptyState";
 import { FilterBar } from "../components/FilterBar";
 import { ConflictBanner } from "../components/ConflictBanner";
-import { applyFilters, sortProjects } from "../lib/filter";
+import { applyFilters, sortProjects, collectDescendants } from "../lib/filter";
 import type { Project, RunState } from "../types";
 
 interface Props {
@@ -32,6 +32,7 @@ export default function Grid(_props: Props) {
     archivedCount,
     conflictsByPort,
     childCountByParent,
+    runningChildCountByParent,
   } = useMemo(() => {
     const all: Project[] = data?.projects ?? [];
     const runStates = data?.runStates ?? {};
@@ -67,9 +68,17 @@ export default function Grid(_props: Props) {
     const conflictMap = new Map<number, Set<string>>();
     for (const c of data?.conflicts ?? []) conflictMap.set(c.port, new Set(c.projectIds));
 
+    // Count every descendant (children + grandchildren …) per top-level project so
+    // the +N pill reflects what the user will actually find under a parent — not
+    // just the immediate child whose own count would be 1 for a nested monorepo.
     const childCount = new Map<string, number>();
-    for (const p of all) {
-      if (p.parent) childCount.set(p.parent, (childCount.get(p.parent) ?? 0) + 1);
+    const runningChildCount = new Map<string, number>();
+    for (const t of tops) {
+      const desc = collectDescendants(all, t.id);
+      if (desc.length === 0) continue;
+      childCount.set(t.id, desc.length);
+      const running = desc.filter((d) => isRunningState(runStates[d.id])).length;
+      if (running > 0) runningChildCount.set(t.id, running);
     }
 
     return {
@@ -79,6 +88,7 @@ export default function Grid(_props: Props) {
       archivedCount: tops.filter((p) => p.archived).length,
       conflictsByPort: conflictMap,
       childCountByParent: childCount,
+      runningChildCountByParent: runningChildCount,
     };
   }, [data, filters]);
 
@@ -138,6 +148,7 @@ export default function Grid(_props: Props) {
                 runState={runStates[p.id] ?? "idle"}
                 running={runningMap[p.id] ?? null}
                 childCount={childCountByParent.get(p.id) ?? 0}
+                runningChildCount={runningChildCountByParent.get(p.id) ?? 0}
                 conflictPeerIds={getConflictPeers(p, conflictsByPort)}
               />
             ))}

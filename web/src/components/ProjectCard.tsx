@@ -12,6 +12,8 @@ interface Props {
   runState: RunState;
   running?: RunningInfo | null;
   childCount?: number;
+  /** How many of this parent's descendants are currently running. */
+  runningChildCount?: number;
   conflictPeerIds?: string[];
 }
 
@@ -24,6 +26,7 @@ export function ProjectRow({
   runState,
   running = null,
   childCount = 0,
+  runningChildCount = 0,
   conflictPeerIds = [],
 }: Props) {
   const nav = useNavigate();
@@ -71,7 +74,21 @@ export function ProjectRow({
           </span>
           <span className="row-name">{project.name}</span>
           {childCount > 0 && (
-            <span className="row-children-pill mono">+{childCount}</span>
+            <button
+              type="button"
+              className={`row-children-pill mono${runningChildCount > 0 ? " is-running" : ""}`}
+              title={
+                runningChildCount > 0
+                  ? `${runningChildCount}/${childCount} 个子项目运行中 — 查看子项目`
+                  : `${childCount} 个子项目 — 查看`
+              }
+              onClick={(e) => {
+                e.stopPropagation();
+                nav(`${detailHref}?tab=subprojects`);
+              }}
+            >
+              {runningChildCount > 0 ? `▶ ${runningChildCount}/${childCount}` : `+${childCount}`}
+            </button>
           )}
         </div>
         <div className="row-desc">
