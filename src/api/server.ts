@@ -10,9 +10,10 @@ import { findConflicts } from "../scanner/conflicts.js";
 import type { PersistedStore, Project, RunState, ScanResult } from "../types.js";
 import { DEFAULT_SETTINGS } from "../types.js";
 import * as openHelpers from "./open.js";
-import { ProbeCache, probePort, findFreePort, isPortExcluded } from "../probe/port.js";
+import { ProbeCache, probePort, isPortExcluded, isPortAvailable } from "../probe/port.js";
 import { listListeningPortsByPid } from "../probe/process.js";
 import { ProcessManager, type LogLine, type RunningInfo } from "../runner/process.js";
+import { applyPortToCommand } from "../runner/schedule.js";
 
 export interface BuildServerOptions {
   scanRoot: string;
@@ -351,32 +352,58 @@ function registerRunnerRoutes(
     portChanged?: boolean;
   }
 
+  /** Ports already handed out to other still-running managed processes. */
+  function reservedPorts(): Set<number> {
+    const reserved = new Set<number>();
+    for (const info of runner.list()) {
+      if (info.state === "exited") continue;
+      if (info.allocatedPort != null) reserved.add(info.allocatedPort);
+    }
+    return reserved;
+  }
+
+  /** First bindable port ≥ start that isn't already reserved this session. */
+  async function findFreePortAvoiding(start: number, reserved: Set<number>): Promise<number | null> {
+    for (let port = start, tries = 0; port <= 65535 && tries < 500; port++, tries++) {
+      if (reserved.has(port)) continue;
+      if (await isPortAvailable(port)) return port;
+    }
+    return null;
+  }
+
   async function startOne(proj: Project): Promise<StartOutcome> {
     const cmd = proj.startCommand ?? proj.startCommandDetected;
     if (!cmd || cmd.trim() === "") return { id: proj.id, ok: false, reason: "no-command" };
     const desiredPort = proj.port ?? proj.portDetected;
     let allocatedPort: number | null = desiredPort;
     let portChanged = false;
-    const env: Record<string, string> = {};
+    let command = cmd;
+    let env: Record<string, string> = {};
 
-    // Port conflict resolution: if the user has a configured port AND it's
-    // already in use by some other process, find the next free port and
-    // hand it to the dev server via PORT env. vite/next/express/uvicorn all
-    // pick this up. The dev server may still ignore PORT (e.g. user
-    // hardcoded a port in code) — in that case the dev server will fail to
-    // bind and the error shows up in the log stream.
+    // Conflict scheduling: a port is unavailable if the OS is using/reserving
+    // it OR another project we just launched this session already claimed it
+    // (covers start-tree of several same-port siblings, e.g. five :3000 apps).
+    // When taken, allocate the next free port and inject it the way THIS tool
+    // understands — Vite needs --port on argv, others read PORT env, and an
+    // explicit --port in the command gets rewritten. See runner/schedule.ts.
     if (desiredPort != null && !runner.isManaged(proj.id)) {
-      const inUse = (await isPortExcluded(desiredPort)) || (await probePort(desiredPort));
+      const reserved = reservedPorts();
+      const inUse =
+        reserved.has(desiredPort) ||
+        (await isPortExcluded(desiredPort)) ||
+        (await probePort(desiredPort));
       if (inUse) {
-        const free = await findFreePort(desiredPort + 1);
+        const free = await findFreePortAvoiding(desiredPort + 1, reserved);
         if (free == null) return { id: proj.id, ok: false, reason: "no-free-port", desiredPort };
         allocatedPort = free;
         portChanged = true;
-        env.PORT = String(free);
+        const injected = applyPortToCommand(cmd, proj.frameworks, free);
+        command = injected.command;
+        env = injected.env;
       }
     }
 
-    const r = runner.start(proj.id, cmd, proj.absPath, {
+    const r = runner.start(proj.id, command, proj.absPath, {
       env,
       desiredPort,
       allocatedPort,

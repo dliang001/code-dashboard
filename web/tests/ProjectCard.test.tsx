@@ -88,4 +88,19 @@ describe("ProjectRow", () => {
     render(withRouter(<ProjectRow project={proj} runState="running-external" />));
     expect(screen.getByText("EXTERNAL")).toBeInTheDocument();
   });
+
+  it("offers an enabled 'start subprojects' button for a command-less parent container", () => {
+    // e.g. VPN: parent-container with no own command but 1 runnable child.
+    const parent = p({ id: "VPN", name: "VPN", kind: "parent-container" });
+    render(withRouter(<ProjectRow project={parent} runState="idle" childCount={1} />));
+    const btn = screen.getByTitle("启动 1 个子项目");
+    expect(btn).toBeInTheDocument();
+    expect(btn).toBeEnabled();
+  });
+
+  it("disables the run button for a leaf with no command and no children", () => {
+    const leaf = p({ id: "x", name: "x" });
+    render(withRouter(<ProjectRow project={leaf} runState="idle" childCount={0} />));
+    expect(screen.getByTitle("未配置启动命令")).toBeDisabled();
+  });
 });

@@ -60,6 +60,21 @@ function normalizeReadmeCommand(command: string): string | null {
   return cmd;
 }
 
+/**
+ * Reject README commands whose runtime doesn't match the project we detected.
+ * Stops a Python project (whose README documents a sibling frontend's
+ * `npm run dev`) from adopting a node command it can't actually run, and
+ * vice-versa. Non-runtime commands (powershell/docker/.sh) pass for any kind.
+ */
+function commandMatchesKind(command: string, kind: ProjectKind): boolean {
+  const lower = command.toLowerCase();
+  const isNodeCmd = /(?:^|\s|&&\s*)(?:npm|pnpm|yarn|bun|npx|node|tsx|ts-node|deno)\b/.test(lower);
+  const isPyCmd = /(?:^|\s|&&\s*)(?:python3?|uv|uvicorn|gunicorn|flask|streamlit|poetry|pipenv)\b/.test(lower);
+  if (kind === "node") return !isPyCmd;
+  if (kind === "python") return !isNodeCmd;
+  return true;
+}
+
 function scoreReadmeCommand(command: string): number {
   const lower = command.toLowerCase();
   let score = 0;
@@ -99,13 +114,14 @@ function collectCodeLines(markdown: string): string[] {
   return lines;
 }
 
-async function detectReadmeStartCommand(dir: string): Promise<string | null> {
+async function detectReadmeStartCommand(dir: string, kind: ProjectKind): Promise<string | null> {
   const candidates: Array<{ command: string; score: number }> = [];
 
   for (const file of README_FILES) {
     const content = await readSafe(path.join(dir, file));
     if (!content) continue;
     for (const command of collectCodeLines(content)) {
+      if (!commandMatchesKind(command, kind)) continue;
       const score = scoreReadmeCommand(command);
       if (score > 0) candidates.push({ command, score });
     }
@@ -115,7 +131,7 @@ async function detectReadmeStartCommand(dir: string): Promise<string | null> {
   return candidates[0]?.command ?? null;
 }
 
-async function findPythonEntry(dir: string, frameworks: string[]): Promise<string | null> {
+export async function findPythonEntry(dir: string, frameworks: string[]): Promise<string | null> {
   for (const file of ["app.py", "main.py"]) {
     if (await exists(path.join(dir, file))) return file;
   }
@@ -162,7 +178,7 @@ function pickNpmScript(scripts: Record<string, string>): string | null {
 }
 
 export async function detectSignals(dir: string): Promise<Signals> {
-  const readmeStartCommand = () => detectReadmeStartCommand(dir);
+  const readmeStartCommand = (kind: ProjectKind) => detectReadmeStartCommand(dir, kind);
 
   // Priority 1: package.json. Many app repos keep docker-compose only for
   // backing services such as Postgres/Redis, so the app package is the better
@@ -176,7 +192,7 @@ export async function detectSignals(dir: string): Promise<Signals> {
       kind: "node",
       language: "node",
       frameworks,
-      startCommandDetected: startCmd ?? (await readmeStartCommand()),
+      startCommandDetected: startCmd ?? (await readmeStartCommand("node")),
     };
   }
 
@@ -207,7 +223,7 @@ export async function detectSignals(dir: string): Promise<Signals> {
       kind: "python",
       language: "python",
       frameworks: [],
-      startCommandDetected: cmd ?? (await readmeStartCommand()),
+      startCommandDetected: cmd ?? (await readmeStartCommand("python")),
     };
   }
 
@@ -231,7 +247,7 @@ export async function detectSignals(dir: string): Promise<Signals> {
       kind: "python",
       language: "python",
       frameworks,
-      startCommandDetected: startCmd ?? (await readmeStartCommand()),
+      startCommandDetected: startCmd ?? (await readmeStartCommand("python")),
     };
   }
 
