@@ -175,4 +175,25 @@ describe("detectSignals", () => {
     expect(sig.kind).toBe("node");
     expect(sig.startCommandDetected).toBe("npm run dev:h5");
   });
+
+  it("detects a custom-named Flask entry file as the start command", async () => {
+    const sig = await detectSignals(path.join(FIX, "port-from-python-entry"));
+    expect(sig.kind).toBe("python");
+    expect(sig.startCommandDetected).toBe("python auto_leak_monitor.py");
+  });
+
+  it("ignores a node command in the README of a Python project", async () => {
+    // notebooklm scenario: a Python project (pyproject.toml, no package.json)
+    // whose README mentions `npm run dev` for a sibling frontend must NOT adopt
+    // that node command as its own start command.
+    const sig = await detectSignals(path.join(FIX, "readme-node-in-python"));
+    expect(sig.kind).toBe("python");
+    expect(sig.startCommandDetected).toBeNull();
+  });
+
+  it("prefers a runtime-matching command from a mixed-language README", async () => {
+    const sig = await detectSignals(path.join(FIX, "readme-python-pref"));
+    expect(sig.kind).toBe("python");
+    expect(sig.startCommandDetected).toBe("python server.py");
+  });
 });

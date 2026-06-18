@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { applyFilters, sortProjects, groupByParent } from "../src/lib/filter";
+import {
+  applyFilters,
+  sortProjects,
+  groupByParent,
+  collectDescendants,
+  effectiveRunState,
+} from "../src/lib/filter";
 import type { Project } from "../src/types";
 
 function p(over: Partial<Project>): Project {
@@ -90,5 +96,74 @@ describe("groupByParent", () => {
     expect(result.parents.map((g) => g.parent.id)).toEqual(["a", "d"]);
     const aGroup = result.parents.find((g) => g.parent.id === "a")!;
     expect(aGroup.children.map((c) => c.id)).toEqual(["a/b", "a/c"]);
+  });
+});
+
+describe("collectDescendants", () => {
+  it("returns empty for a leaf", () => {
+    const list = [p({ id: "a" }), p({ id: "b" })];
+    expect(collectDescendants(list, "a")).toEqual([]);
+  });
+
+  it("returns direct children, then grandchildren depth-first", () => {
+    const list = [
+      p({ id: "root" }),
+      p({ id: "root/app", parent: "root" }),
+      p({ id: "root/app/web", parent: "root/app" }),
+      p({ id: "root/app/server", parent: "root/app" }),
+      p({ id: "other" }),
+    ];
+    const ids = collectDescendants(list, "root").map((x) => x.id);
+    expect(ids).toEqual(["root/app", "root/app/web", "root/app/server"]);
+  });
+
+  it("does not include the root itself", () => {
+    const list = [p({ id: "root" }), p({ id: "root/a", parent: "root" })];
+    const ids = collectDescendants(list, "root").map((x) => x.id);
+    expect(ids).not.toContain("root");
+  });
+
+  it("returns empty for unknown root id", () => {
+    const list = [p({ id: "a" })];
+    expect(collectDescendants(list, "nonexistent")).toEqual([]);
+  });
+});
+
+describe("effectiveRunState", () => {
+  const tree = () => [
+    p({ id: "VPN", children: ["VPN/setup-tool"] }),
+    p({ id: "VPN/setup-tool", parent: "VPN" }),
+    p({ id: "solo" }),
+  ];
+
+  it("is idle for a parent whose children are all idle", () => {
+    const all = tree();
+    expect(effectiveRunState(all[0]!, all, {})).toBe("idle");
+  });
+
+  it("reports a parent as running when a subproject is running", () => {
+    const all = tree();
+    // VPN itself has no process; setup-tool is running-external.
+    const s = effectiveRunState(all[0]!, all, { "VPN/setup-tool": "running-external" });
+    expect(s).toBe("running");
+  });
+
+  it("counts a deep descendant, not just direct children", () => {
+    const all = [
+      p({ id: "top", children: ["top/mid"] }),
+      p({ id: "top/mid", parent: "top", children: ["top/mid/leaf"] }),
+      p({ id: "top/mid/leaf", parent: "top/mid" }),
+    ];
+    expect(effectiveRunState(all[0]!, all, { "top/mid/leaf": "starting" })).toBe("running");
+  });
+
+  it("keeps the project's own state when it is itself running", () => {
+    const all = tree();
+    expect(effectiveRunState(all[0]!, all, { VPN: "running-external" })).toBe("running-external");
+  });
+
+  it("leaves a plain running leaf untouched", () => {
+    const all = tree();
+    expect(effectiveRunState(all[2]!, all, { solo: "error" })).toBe("error");
   });
 });

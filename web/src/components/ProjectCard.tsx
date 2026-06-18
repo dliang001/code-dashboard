@@ -2,7 +2,7 @@ import { useNavigate } from "react-router-dom";
 import type { Project, RunningInfo, RunState } from "../types";
 import { StatusDot, StatusBadge } from "./StatusBadge";
 import { IconBtn, IconPlay, IconStop, IconPlayHollow, IconCode, IconFolder } from "./IconBtn";
-import { useStartProject, useStopProject } from "../hooks/useRunner";
+import { useStartProject, useStopProject, useStartTree } from "../hooks/useRunner";
 import * as api from "../api";
 import { useMutation } from "@tanstack/react-query";
 import { formatRelative, projectKindGlyph, projectKindLabel } from "../lib/format";
@@ -12,6 +12,8 @@ interface Props {
   runState: RunState;
   running?: RunningInfo | null;
   childCount?: number;
+  /** How many of this parent's descendants are currently running. */
+  runningChildCount?: number;
   conflictPeerIds?: string[];
 }
 
@@ -24,11 +26,13 @@ export function ProjectRow({
   runState,
   running = null,
   childCount = 0,
+  runningChildCount = 0,
   conflictPeerIds = [],
 }: Props) {
   const nav = useNavigate();
   const start = useStartProject(project.id);
   const stop = useStopProject(project.id);
+  const startTree = useStartTree(project.id);
   const openVS = useMutation({ mutationFn: () => api.openVSCode(project.id) });
   const openFolder = useMutation({ mutationFn: () => api.openFolder(project.id) });
 
@@ -39,6 +43,9 @@ export function ProjectRow({
   const accessUrl = pickAccessUrl(running, port, runState);
   const isManaged = running != null && running.state !== "exited";
   const hasCommand = !!(project.startCommand || project.startCommandDetected);
+  // A pure parent container (no own command, but has runnable subprojects):
+  // the row's run button launches the whole subtree via start-tree.
+  const isContainer = !hasCommand && childCount > 0;
   const detailHref = `/project/${encodeURIComponent(project.id)}`;
   const cls = [
     "row",
@@ -67,7 +74,21 @@ export function ProjectRow({
           </span>
           <span className="row-name">{project.name}</span>
           {childCount > 0 && (
-            <span className="row-children-pill mono">+{childCount}</span>
+            <button
+              type="button"
+              className={`row-children-pill mono${runningChildCount > 0 ? " is-running" : ""}`}
+              title={
+                runningChildCount > 0
+                  ? `${runningChildCount}/${childCount} 个子项目运行中 — 查看子项目`
+                  : `${childCount} 个子项目 — 查看`
+              }
+              onClick={(e) => {
+                e.stopPropagation();
+                nav(`${detailHref}?tab=subprojects`);
+              }}
+            >
+              {runningChildCount > 0 ? `▶ ${runningChildCount}/${childCount}` : `+${childCount}`}
+            </button>
           )}
         </div>
         <div className="row-desc">
@@ -159,6 +180,15 @@ export function ProjectRow({
               {IconPlay}
             </IconBtn>
           )
+        ) : isContainer ? (
+          <IconBtn
+            title={`启动 ${childCount} 个子项目`}
+            accent
+            onClick={() => startTree.mutate()}
+            disabled={startTree.isPending}
+          >
+            {IconPlay}
+          </IconBtn>
         ) : (
           <IconBtn title="未配置启动命令" disabled>
             {IconPlayHollow}

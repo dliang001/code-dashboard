@@ -5,7 +5,7 @@ import { ProjectRow } from "../components/ProjectCard";
 import { EmptyState } from "../components/EmptyState";
 import { FilterBar } from "../components/FilterBar";
 import { ConflictBanner } from "../components/ConflictBanner";
-import { applyFilters, sortProjects } from "../lib/filter";
+import { applyFilters, sortProjects, collectDescendants, effectiveRunState } from "../lib/filter";
 import type { Project, RunState } from "../types";
 
 interface Props {
@@ -32,6 +32,8 @@ export default function Grid(_props: Props) {
     archivedCount,
     conflictsByPort,
     childCountByParent,
+    runningChildCountByParent,
+    effectiveStateByTop,
   } = useMemo(() => {
     const all: Project[] = data?.projects ?? [];
     const runStates = data?.runStates ?? {};
@@ -41,6 +43,26 @@ export default function Grid(_props: Props) {
       new Set(all.map((p) => p.language).filter((l): l is string => !!l)),
     ).sort();
 
+    // Per-parent descendant counts + an EFFECTIVE run state that treats a
+    // parent as running when any subproject is running (a parent container has
+    // no process of its own, so its raw state is always idle). Built first so
+    // the status filter/counts/row badge all agree with the green "+N" pill.
+    // The pill counts every descendant (children + grandchildren…), not just
+    // the immediate child whose own count would be 1 for a nested monorepo.
+    const childCount = new Map<string, number>();
+    const runningChildCount = new Map<string, number>();
+    const effectiveState = new Map<string, RunState>();
+    for (const t of tops) {
+      const desc = collectDescendants(all, t.id);
+      if (desc.length > 0) {
+        childCount.set(t.id, desc.length);
+        const running = desc.filter((d) => isRunningState(runStates[d.id])).length;
+        if (running > 0) runningChildCount.set(t.id, running);
+      }
+      effectiveState.set(t.id, effectiveRunState(t, all, runStates));
+    }
+    const stateOf = (p: Project): RunState => effectiveState.get(p.id) ?? "idle";
+
     // Status filter applies on top of search/language/archived.
     const baseFiltered = applyFilters(tops, {
       search: filters.search,
@@ -49,7 +71,7 @@ export default function Grid(_props: Props) {
     });
     const statusFiltered = baseFiltered.filter((p) => {
       if (filters.status === "all") return true;
-      const s = runStates[p.id];
+      const s = stateOf(p);
       if (filters.status === "running") return isRunningState(s);
       if (filters.status === "idle") return isIdleState(s);
       if (filters.status === "error") return s === "error";
@@ -59,18 +81,13 @@ export default function Grid(_props: Props) {
 
     const counts: Record<StatusFilter, number> = {
       all: tops.length,
-      running: tops.filter((p) => isRunningState(runStates[p.id])).length,
-      idle: tops.filter((p) => isIdleState(runStates[p.id])).length,
-      error: tops.filter((p) => runStates[p.id] === "error").length,
+      running: tops.filter((p) => isRunningState(stateOf(p))).length,
+      idle: tops.filter((p) => isIdleState(stateOf(p))).length,
+      error: tops.filter((p) => stateOf(p) === "error").length,
     };
 
     const conflictMap = new Map<number, Set<string>>();
     for (const c of data?.conflicts ?? []) conflictMap.set(c.port, new Set(c.projectIds));
-
-    const childCount = new Map<string, number>();
-    for (const p of all) {
-      if (p.parent) childCount.set(p.parent, (childCount.get(p.parent) ?? 0) + 1);
-    }
 
     return {
       visible: sorted,
@@ -79,6 +96,8 @@ export default function Grid(_props: Props) {
       archivedCount: tops.filter((p) => p.archived).length,
       conflictsByPort: conflictMap,
       childCountByParent: childCount,
+      runningChildCountByParent: runningChildCount,
+      effectiveStateByTop: effectiveState,
     };
   }, [data, filters]);
 
@@ -135,9 +154,10 @@ export default function Grid(_props: Props) {
               <ProjectRow
                 key={p.id}
                 project={p}
-                runState={runStates[p.id] ?? "idle"}
+                runState={effectiveStateByTop.get(p.id) ?? runStates[p.id] ?? "idle"}
                 running={runningMap[p.id] ?? null}
                 childCount={childCountByParent.get(p.id) ?? 0}
+                runningChildCount={runningChildCountByParent.get(p.id) ?? 0}
                 conflictPeerIds={getConflictPeers(p, conflictsByPort)}
               />
             ))}

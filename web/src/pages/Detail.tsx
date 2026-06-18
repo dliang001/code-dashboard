@@ -1,4 +1,4 @@
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useSearchParams } from "react-router-dom";
 import { useState } from "react";
 import { useProject, useProjects, usePatchProject } from "../hooks/useProjects";
 import { useStartTree, useStopTree } from "../hooks/useRunner";
@@ -13,6 +13,7 @@ import { RunControls } from "../components/RunControls";
 import { AccessUrls } from "../components/AccessUrls";
 import { useStartProject, useStopProject } from "../hooks/useRunner";
 import { formatRelative, projectKindGlyph, projectKindLabel } from "../lib/format";
+import { collectDescendants } from "../lib/filter";
 import type { Project, RunningInfo, RunState } from "../types";
 
 type Tab = "overview" | "subprojects" | "logs" | "readme";
@@ -28,7 +29,13 @@ export default function Detail({ onOpenLogs }: Props) {
   const { data, isLoading, error } = useProject(id);
   const list = useProjects();
   const patch = usePatchProject(id);
-  const [tab, setTab] = useState<Tab>("overview");
+  const [searchParams] = useSearchParams();
+  const requestedTab = searchParams.get("tab");
+  const initialTab: Tab =
+    requestedTab === "subprojects" || requestedTab === "logs" || requestedTab === "readme"
+      ? requestedTab
+      : "overview";
+  const [tab, setTab] = useState<Tab>(initialTab);
 
   if (isLoading) return <Shell><p style={{ color: "var(--ink-2)" }}>加载中…</p></Shell>;
   if (error) return <Shell><p style={{ color: "var(--c-err)" }}>加载失败：{(error as Error).message}</p></Shell>;
@@ -41,7 +48,7 @@ export default function Detail({ onOpenLogs }: Props) {
   const allProjects = list.data?.projects ?? [];
   const runStates = list.data?.runStates ?? {};
   const runningMap = list.data?.running ?? {};
-  const childProjects = allProjects.filter((p) => p.parent === proj.id);
+  const childProjects = collectDescendants(allProjects, proj.id);
   const isParent = childProjects.length > 0;
   const isRunning =
     data.runState === "running" ||
@@ -151,6 +158,7 @@ export default function Detail({ onOpenLogs }: Props) {
         )}
         {tab === "subprojects" && (
           <SubprojectsTab
+            rootId={proj.id}
             children={childProjects}
             runStates={runStates}
             runningMap={runningMap}
@@ -173,6 +181,11 @@ export default function Detail({ onOpenLogs }: Props) {
 
 function Shell({ children }: { children: React.ReactNode }) {
   return <div className="detail">{children}</div>;
+}
+
+function relPathFrom(rootId: string, childId: string): string {
+  const prefix = `${rootId}/`;
+  return childId.startsWith(prefix) ? childId.slice(prefix.length) : childId;
 }
 
 function TabBtn({
@@ -443,10 +456,12 @@ function PortEditor({
 }
 
 function SubprojectsTab({
+  rootId,
   children,
   runStates,
   runningMap,
 }: {
+  rootId: string;
   children: Project[];
   runStates: Record<string, RunState>;
   runningMap: Record<string, RunningInfo>;
@@ -465,6 +480,7 @@ function SubprojectsTab({
         <SubRow
           key={c.id}
           project={c}
+          rootId={rootId}
           runState={runStates[c.id] ?? "idle"}
           running={runningMap[c.id] ?? null}
         />
@@ -475,10 +491,12 @@ function SubprojectsTab({
 
 function SubRow({
   project,
+  rootId,
   runState,
   running,
 }: {
   project: Project;
+  rootId: string;
   runState: RunState;
   running: RunningInfo | null;
 }) {
@@ -496,7 +514,12 @@ function SubRow({
     >
       <StatusDot state={runState} size={9} />
       <div>
-        <div className="sub-name">{project.name}</div>
+        <div className="sub-name">
+          {project.name}
+          {project.id !== `${rootId}/${project.name}` && (
+            <span className="sub-path mono"> · {relPathFrom(rootId, project.id)}</span>
+          )}
+        </div>
         <div className="sub-desc">
           {project.description ?? project.descriptionAuto ?? (
             <span className="muted-italic">—</span>
